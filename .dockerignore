@@ -1,0 +1,11 @@
+# Never bake secrets or local state into the image.
+config.yml
+config.*.yml
+data/
+*.exe
+# Docs/build artifacts are irrelevant to the binary.
+README.md
+Dockerfile
+.dockerignore
+.git
+.gitignore
