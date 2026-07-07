@@ -1,4 +1,4 @@
-# Phase 6 — Deploying a DEG Mods node (Docker + Caddy)
+# Deploying a DEG Mods node (Docker + Caddy)
 
 Step-by-step to run the node on a fresh Ubuntu VPS behind Caddy (automatic HTTPS),
 pointed at the same R2 bucket as `bs.degmods.com`, then cut traffic over.

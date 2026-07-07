@@ -11,7 +11,7 @@ var (
 )
 
 // uploadLimiter enforces a global concurrency cap plus one in-flight upload per
-// npub. Phase 1 baseline; rolling per-npub quotas / rate tiers come later.
+// npub. (Rolling per-npub quotas / rate tiers could be layered on later.)
 type uploadLimiter struct {
 	global   chan struct{}
 	mu       sync.Mutex

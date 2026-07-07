@@ -1,6 +1,5 @@
-// Command degnode runs the DEG Mods node (mod relay + Blossom server).
-//
-// Phase 0: serves the files already in the R2 bucket (read parity), no gates.
+// Command degnode runs a DEG Mods node: a Blossom blob server + mod-scoped Nostr
+// relay, with pluggable storage and optional PoW/ad download gates.
 package main
 
 import (

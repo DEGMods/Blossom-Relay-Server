@@ -8,11 +8,10 @@ import (
 	"github.com/nbd-wtf/go-nostr"
 )
 
-// r2Index is a minimal blossom.BlobIndex backed by the storage layer. Phase 0
-// does not track ownership (the existing bucket's blobs predate this node), so
-// Keep/Delete are no-ops and List is empty. Get reflects real object existence so
-// GET/HEAD work for the files already in the bucket. Phase 2 replaces this with a
-// persistent, ownership-tracking index (khatru's EventStoreBlobIndexWrapper).
+// r2Index is a minimal blossom.BlobIndex backed by the storage layer. It does not
+// track ownership, so Keep/Delete are no-ops and List is empty; Get reflects real
+// object existence so blob GET/HEAD work. (A persistent, ownership-tracking index
+// via khatru's EventStoreBlobIndexWrapper could replace this later.)
 type r2Index struct {
 	st        storage.Storage
 	publicURL string
