@@ -136,11 +136,20 @@ var (
 	errUploadStalled  = errors.New("upload stalled")
 )
 
+// uploadLimitFor returns the max upload size for a pubkey — 5× the normal cap for
+// whitelisted keys.
+func (s *Server) uploadLimitFor(pubkey string) int64 {
+	if s.white.has(pubkey) {
+		return s.maxUploadBytes * 5
+	}
+	return s.maxUploadBytes
+}
+
 // streamBody copies the request body to dst, enforcing the size cap and an idle
 // timeout that resets on every chunk. Slow-but-steady uploads are fine (each chunk
 // resets the deadline); a stalled or trickle connection is aborted so it can't hold
 // a concurrency slot + temp file indefinitely.
-func (s *Server) streamBody(w http.ResponseWriter, r *http.Request, dst io.Writer) (int64, error) {
+func (s *Server) streamBody(w http.ResponseWriter, r *http.Request, dst io.Writer, limit int64) (int64, error) {
 	rc := http.NewResponseController(w)
 	buf := make([]byte, 128*1024)
 	var total int64
@@ -152,7 +161,7 @@ func (s *Server) streamBody(w http.ResponseWriter, r *http.Request, dst io.Write
 		nr, er := r.Body.Read(buf)
 		if nr > 0 {
 			total += int64(nr)
-			if total > s.maxUploadBytes {
+			if total > limit {
 				return total, errUploadTooLarge
 			}
 			if _, ew := dst.Write(buf[:nr]); ew != nil {
@@ -191,7 +200,7 @@ func (s *Server) handleUploadHead(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if sz := r.Header.Get("X-Content-Length"); sz != "" {
-		if v, e := strconv.ParseInt(sz, 10, 64); e == nil && v > s.maxUploadBytes {
+		if v, e := strconv.ParseInt(sz, 10, 64); e == nil && v > s.uploadLimitFor(evt.PubKey) {
 			httpErr(w, http.StatusRequestEntityTooLarge, "file exceeds the size limit")
 			return
 		}
@@ -224,7 +233,8 @@ func (s *Server) handleUploadPut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusForbidden, "blocked")
 		return
 	}
-	if r.ContentLength > s.maxUploadBytes {
+	limit := s.uploadLimitFor(evt.PubKey)
+	if r.ContentLength > limit {
 		httpErr(w, http.StatusRequestEntityTooLarge, "file exceeds the size limit")
 		return
 	}
@@ -251,7 +261,7 @@ func (s *Server) handleUploadPut(w http.ResponseWriter, r *http.Request) {
 	// Stream → temp file + hasher, hard-capped in case Content-Length lied, with an
 	// idle timeout so a stalled or trickle upload can't hold a slot/temp file forever.
 	h := sha256.New()
-	n, err := s.streamBody(w, r, io.MultiWriter(tmp, h))
+	n, err := s.streamBody(w, r, io.MultiWriter(tmp, h), limit)
 	if err == errUploadTooLarge {
 		httpErr(w, http.StatusRequestEntityTooLarge, "file exceeds the size limit")
 		return

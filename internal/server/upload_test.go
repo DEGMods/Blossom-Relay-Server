@@ -13,6 +13,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -44,6 +45,19 @@ func (f *fakeStorage) Has(context.Context, string, string) (bool, error) {
 }
 func (f *fakeStorage) Stat(context.Context, string, string) (storage.StatInfo, error) {
 	return storage.StatInfo{}, storage.ErrNotFound
+}
+func (f *fakeStorage) List(context.Context) ([]storage.BlobInfo, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []storage.BlobInfo
+	for k, v := range f.stored {
+		hash, ext := k, ""
+		if dot := strings.IndexByte(k, '.'); dot >= 0 {
+			hash, ext = k[:dot], k[dot+1:]
+		}
+		out = append(out, storage.BlobInfo{Key: k, Hash: hash, Ext: ext, Size: int64(len(v))})
+	}
+	return out, nil
 }
 
 // tempDataDir returns a temp dir for the node's badger store with best-effort

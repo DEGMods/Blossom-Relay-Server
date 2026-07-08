@@ -142,6 +142,39 @@ func (d *Disk) Has(_ context.Context, sha256, ext string) (bool, error) {
 	return err == nil, err
 }
 
+// List returns every stored blob (name + size) by scanning the shard dirs.
+func (d *Disk) List(_ context.Context) ([]BlobInfo, error) {
+	shards, err := os.ReadDir(d.root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	var out []BlobInfo
+	for _, sh := range shards {
+		if !sh.IsDir() {
+			continue
+		}
+		entries, err := os.ReadDir(filepath.Join(d.root, sh.Name()))
+		if err != nil {
+			return nil, err
+		}
+		for _, e := range entries {
+			if e.IsDir() || strings.Contains(e.Name(), ".tmp") {
+				continue
+			}
+			info, err := e.Info()
+			if err != nil {
+				continue
+			}
+			hash, ext := splitKey(e.Name())
+			out = append(out, BlobInfo{Key: e.Name(), Hash: hash, Ext: ext, Size: info.Size()})
+		}
+	}
+	return out, nil
+}
+
 // Stat returns blob metadata (content type inferred from the extension).
 func (d *Disk) Stat(_ context.Context, sha256, ext string) (StatInfo, error) {
 	p, err := d.pathFor(sha256, ext)

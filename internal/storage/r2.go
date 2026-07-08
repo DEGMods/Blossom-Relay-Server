@@ -167,6 +167,19 @@ func (r *R2) Has(ctx context.Context, sha256, ext string) (bool, error) {
 	return ok, err
 }
 
+// List returns every object in the bucket (name + size).
+func (r *R2) List(ctx context.Context) ([]BlobInfo, error) {
+	var out []BlobInfo
+	for obj := range r.client.ListObjects(ctx, r.bucket, minio.ListObjectsOptions{Recursive: true}) {
+		if obj.Err != nil {
+			return nil, obj.Err
+		}
+		hash, ext := splitKey(obj.Key)
+		out = append(out, BlobInfo{Key: obj.Key, Hash: hash, Ext: ext, Size: obj.Size})
+	}
+	return out, nil
+}
+
 // Stat returns blob metadata.
 func (r *R2) Stat(ctx context.Context, sha256, ext string) (StatInfo, error) {
 	var si StatInfo

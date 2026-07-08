@@ -63,6 +63,7 @@ func (s *Server) handleDelete(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadGateway, "storage delete failed")
 		return
 	}
+	s.invalidateBlobCache()
 	slog.Info("blob deleted", "hash", hash, "admin", evt.PubKey)
 	w.WriteHeader(http.StatusOK)
 }

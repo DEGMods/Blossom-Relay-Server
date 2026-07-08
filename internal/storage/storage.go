@@ -8,16 +8,34 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 )
 
 // ErrNotFound is returned when a blob does not exist.
 var ErrNotFound = errors.New("blob not found")
+
+// splitKey splits "<hash>.<ext>" into its hash and extension (ext "" if none).
+func splitKey(key string) (hash, ext string) {
+	if dot := strings.IndexByte(key, '.'); dot >= 0 {
+		return key[:dot], key[dot+1:]
+	}
+	return key, ""
+}
 
 // StatInfo is lightweight blob metadata.
 type StatInfo struct {
 	Size        int64
 	ContentType string
 	Key         string // the resolved object key, e.g. "<sha256>.zip"
+}
+
+// BlobInfo is a listed object (name + size). Content-addressed stores hold only
+// names + sizes here, so the full listing is small enough to paginate in memory.
+type BlobInfo struct {
+	Key  string // "<sha256>.<ext>"
+	Hash string // sha256 (the key without extension)
+	Ext  string // extension without the dot, e.g. "zip"
+	Size int64
 }
 
 // Storage is a content-addressed blob store.
@@ -39,4 +57,8 @@ type Storage interface {
 
 	// Stat returns blob metadata (size, content type). Returns ErrNotFound if absent.
 	Stat(ctx context.Context, sha256, ext string) (StatInfo, error)
+
+	// List returns every stored blob (name + size), for admin browsing. The caller
+	// filters/paginates in memory.
+	List(ctx context.Context) ([]BlobInfo, error)
 }

@@ -92,6 +92,23 @@ Blobs are keyed `<sha256>.<ext>`. Mod files are meant to **persist** — there i
 automatic pruning or expiry. Deletion is manual only: the authenticated Blossom
 `DELETE /<hash>` path and the NIP-86 admin ban/allow API.
 
+## Admin API
+
+Management endpoints authenticated with **NIP-98** (a kind-27235 event signed by
+`relay.admin_npub`), so an admin signs each request in the browser (NIP-07) with no
+raw key on the server. All require `Authorization: Nostr <base64(event)>`.
+
+- `GET /admin/blobs?search=&page=&per=` — list stored blobs (hash, ext, size, url),
+  filtered by a hash substring, numbered pagination (cached 30s).
+- `GET /admin/whitelist` — the upload-size whitelist + the normal/5× caps.
+- `POST /admin/whitelist` `{ "pubkey", "note?" }` — grant a pubkey the **5× upload
+  cap** (accepts npub or hex).
+- `DELETE /admin/whitelist` `{ "pubkey" }` — revoke it.
+- `DELETE /<hash>` — remove a blob (admin-signed kind-24242 `t=delete`).
+
+Pubkey **bans** use the relay's NIP-86 API and are unified: a banned key can neither
+post mod events nor upload blobs.
+
 ## Build & run from source
 
 Requires Go 1.25+.

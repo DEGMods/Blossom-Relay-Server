@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/DEG-Mods/blossom-relay-server/internal/config"
@@ -42,7 +43,13 @@ type Server struct {
 	minEventPoW       int
 	limiter           *uploadLimiter
 	block             *blocklist
+	white             *whitelist
 	adminPubkey       string // hex; the only key allowed to delete blobs (moderation)
+
+	// admin blob-listing cache (avoids a full storage scan on every page click)
+	blobCacheMu sync.Mutex
+	blobCache   []storage.BlobInfo
+	blobCacheAt time.Time
 
 	// download gates (BUD-POW + BUD-Ads)
 	powDifficulty   int
@@ -99,6 +106,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		minEventPoW:       cfg.Relay.MinEventPoW,
 		limiter:           newUploadLimiter(cfg.Upload.MaxConcurrent),
 		block:             loadBlocklist(filepath.Join(cfg.DataDir, "blocklist.json")),
+		white:             loadWhitelist(filepath.Join(cfg.DataDir, "whitelist.json")),
 		adminPubkey:       resolvePubkey(cfg.Relay.AdminNpub),
 
 		powDifficulty:   cfg.Download.PoWDifficulty,
@@ -134,9 +142,16 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 			w.WriteHeader(http.StatusNoContent)
 		})
 	}
-	// Admin-only blob deletion (our streaming upload bypasses khatru's blob index,
-	// so we handle DELETE ourselves rather than via the relay's blossom handler).
+	// Admin API (NIP-98 auth, admin key). Blob deletion via DELETE /<hash>.
 	mux.HandleFunc("DELETE /{hash}", s.handleDelete)
+	mux.HandleFunc("GET /admin/blobs", s.handleAdminBlobs)
+	mux.HandleFunc("GET /admin/whitelist", s.handleAdminWhitelistList)
+	mux.HandleFunc("POST /admin/whitelist", s.handleAdminWhitelistAdd)
+	mux.HandleFunc("DELETE /admin/whitelist", s.handleAdminWhitelistRemove)
+	mux.HandleFunc("OPTIONS /admin/{rest...}", func(w http.ResponseWriter, r *http.Request) {
+		setAdminCORS(w)
+		w.WriteHeader(http.StatusNoContent)
+	})
 	mux.Handle("/", s.gate(relay)) // BUD-POW/BUD-Ads gate on blob GET; pass-through otherwise
 	s.handler = mux
 
