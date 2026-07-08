@@ -47,6 +47,9 @@ func (s *Server) rejectEvent(ctx context.Context, evt *nostr.Event) (bool, strin
 	if s.blocked(evt.PubKey) {
 		return true, "blocked: pubkey is banned"
 	}
+	if s.bannedEv.has(moderationKey(evt)) {
+		return true, "blocked: this event was removed by a moderator"
+	}
 	switch evt.Kind {
 	case currentModKind:
 		if tagValue(evt, "d") == "" {
@@ -104,18 +107,6 @@ func (s *Server) setupRelay(store *badger.BadgerBackend, adminPubkey string) {
 	m.BanPubKey = func(ctx context.Context, pubkey, reason string) error { return s.block.ban(pubkey, reason) }
 	m.AllowPubKey = func(ctx context.Context, pubkey, reason string) error { return s.block.allow(pubkey) }
 	m.ListBannedPubKeys = func(ctx context.Context) ([]nip86.PubKeyReason, error) { return s.block.list(), nil }
-	// Event takedown: delete the event from the store. (A determined author could
-	// re-publish; ban the pubkey for a persistent block.)
-	m.BanEvent = func(ctx context.Context, id, reason string) error {
-		ch, err := store.QueryEvents(ctx, nostr.Filter{IDs: []string{id}})
-		if err != nil {
-			return err
-		}
-		for evt := range ch {
-			if derr := store.DeleteEvent(ctx, evt); derr != nil {
-				return derr
-			}
-		}
-		return nil
-	}
+	// Event takedowns are handled by the admin API (persistent, address-based, with
+	// auto-reject on re-publish), not one-shot NIP-86 banevent.
 }

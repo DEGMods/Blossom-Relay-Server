@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/DEG-Mods/blossom-relay-server/internal/storage"
+	"github.com/nbd-wtf/go-nostr"
 )
 
 // Admin API — moderation/management endpoints authenticated via NIP-98 (a signed
@@ -235,6 +236,90 @@ func (s *Server) handleAdminWhitelistRemove(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// ── event takedowns (persistent, address-based) ───────────────────────────────
+
+func (s *Server) handleBannedEventsList(w http.ResponseWriter, r *http.Request) {
+	setAdminCORS(w)
+	if err := s.verifyAdmin(r); err != nil {
+		httpErr(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"entries": s.bannedEv.list()})
+}
+
+// handleBanEvent bans an event key (its "<kind>:<pubkey>:<d>" coordinate or id) so
+// it is auto-rejected on re-publish, and deletes the currently-stored copy.
+func (s *Server) handleBanEvent(w http.ResponseWriter, r *http.Request) {
+	setAdminCORS(w)
+	if err := s.verifyAdmin(r); err != nil {
+		httpErr(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	var body struct {
+		Key    string `json:"key"`
+		Reason string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		httpErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	key := strings.TrimSpace(body.Key)
+	if key == "" {
+		httpErr(w, http.StatusBadRequest, "missing event key")
+		return
+	}
+	if err := s.bannedEv.ban(key, strings.TrimSpace(body.Reason)); err != nil {
+		httpErr(w, http.StatusInternalServerError, "save failed")
+		return
+	}
+	s.deleteStoredByKey(r.Context(), key)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleUnbanEvent(w http.ResponseWriter, r *http.Request) {
+	setAdminCORS(w)
+	if err := s.verifyAdmin(r); err != nil {
+		httpErr(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	var body struct {
+		Key string `json:"key"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		httpErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if err := s.bannedEv.unban(strings.TrimSpace(body.Key)); err != nil {
+		httpErr(w, http.StatusInternalServerError, "save failed")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// deleteStoredByKey removes the currently-stored event matching a ban key (an
+// addressable coordinate "<kind>:<pubkey>:<d>", or a bare event id).
+func (s *Server) deleteStoredByKey(ctx context.Context, key string) {
+	var f nostr.Filter
+	if parts := strings.SplitN(key, ":", 3); len(parts) == 3 {
+		kind, err := strconv.Atoi(parts[0])
+		if err != nil {
+			return
+		}
+		f = nostr.Filter{Kinds: []int{kind}, Authors: []string{parts[1]}, Tags: nostr.TagMap{"d": []string{parts[2]}}}
+	} else if isSHA256Hex(key) {
+		f = nostr.Filter{IDs: []string{key}}
+	} else {
+		return
+	}
+	ch, err := s.store.QueryEvents(ctx, f)
+	if err != nil {
+		return
+	}
+	for evt := range ch {
+		_ = s.store.DeleteEvent(ctx, evt)
+	}
 }
 
 // ── small helpers ─────────────────────────────────────────────────────────────

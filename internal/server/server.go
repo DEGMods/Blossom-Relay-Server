@@ -45,6 +45,7 @@ type Server struct {
 	limiter           *uploadLimiter
 	block             *blocklist
 	white             *whitelist
+	bannedEv          *bannedEvents
 	adminPubkey       string // hex; the only key allowed to delete blobs (moderation)
 
 	// admin blob-listing cache (avoids a full storage scan on every page click)
@@ -109,6 +110,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		limiter:           newUploadLimiter(cfg.Upload.MaxConcurrent),
 		block:             loadBlocklist(filepath.Join(cfg.DataDir, "blocklist.json")),
 		white:             loadWhitelist(filepath.Join(cfg.DataDir, "whitelist.json")),
+		bannedEv:          loadBannedEvents(filepath.Join(cfg.DataDir, "banned_events.json")),
 		adminPubkey:       resolvePubkey(cfg.Relay.AdminNpub),
 
 		powDifficulty:   cfg.Download.PoWDifficulty,
@@ -150,6 +152,9 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 	mux.HandleFunc("GET /admin/whitelist", s.handleAdminWhitelistList)
 	mux.HandleFunc("POST /admin/whitelist", s.handleAdminWhitelistAdd)
 	mux.HandleFunc("DELETE /admin/whitelist", s.handleAdminWhitelistRemove)
+	mux.HandleFunc("GET /admin/banned-events", s.handleBannedEventsList)
+	mux.HandleFunc("POST /admin/banned-events", s.handleBanEvent)
+	mux.HandleFunc("DELETE /admin/banned-events", s.handleUnbanEvent)
 	mux.HandleFunc("OPTIONS /admin/{rest...}", func(w http.ResponseWriter, r *http.Request) {
 		setAdminCORS(w)
 		w.WriteHeader(http.StatusNoContent)
