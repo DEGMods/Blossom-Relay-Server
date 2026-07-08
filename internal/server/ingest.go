@@ -23,6 +23,12 @@ func (s *Server) RunIngest(ctx context.Context, relays []string) {
 	}
 	slog.Info("ingest started", "relays", len(relays))
 
+	// Back-fill all history first (relays cap a single subscription, so paginate
+	// backward until exhausted), then stay live for new events.
+	for _, f := range filters {
+		s.backfill(ctx, pool, relays, f)
+	}
+
 	var stored, seen int
 	for re := range pool.SubMany(ctx, relays, filters) {
 		evt := re.Event
@@ -48,4 +54,47 @@ func (s *Server) RunIngest(ctx context.Context, relays []string) {
 		}
 	}
 	slog.Info("ingest stopped", "stored", stored, "seen", seen)
+}
+
+// backfill pulls the full history for a filter by paginating backward in windows
+// (relays cap how much they return at once), storing every valid event.
+func (s *Server) backfill(ctx context.Context, pool *nostr.SimplePool, relays []string, filter nostr.Filter) {
+	const window = 500
+	until := nostr.Now()
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		f := filter
+		f.Until = &until
+		f.Limit = window
+
+		got, stored := 0, 0
+		oldest := until
+		for re := range pool.FetchMany(ctx, relays, f) {
+			evt := re.Event
+			if evt == nil {
+				continue
+			}
+			got++
+			if evt.CreatedAt < oldest {
+				oldest = evt.CreatedAt
+			}
+			if ok, err := evt.CheckSignature(); err != nil || !ok {
+				continue
+			}
+			if reject, _ := s.rejectEvent(ctx, evt); reject {
+				continue
+			}
+			if err := s.store.ReplaceEvent(ctx, evt); err == nil {
+				stored++
+			}
+		}
+		slog.Info("ingest backfill window", "kinds", filter.Kinds, "fetched", got, "stored", stored)
+		// Stop when a window returns nothing, or we can't move further back.
+		if got == 0 || oldest >= until {
+			return
+		}
+		until = oldest - 1
+	}
 }
