@@ -74,7 +74,16 @@ func main() {
 	slog.Info("node listening",
 		"addr", cfg.Listen, "storage", cfg.Backend, "public_url", cfg.PublicURL,
 		"pow_bits", cfg.Download.PoWDifficulty, "ad_gate", cfg.Download.AdGate)
-	if err := http.ListenAndServe(cfg.Listen, srv.Handler()); err != nil {
+	httpSrv := &http.Server{
+		Addr:    cfg.Listen,
+		Handler: srv.Handler(),
+		// Bound the handshake/headers and idle keep-alives, but NOT total read/write
+		// time — large uploads/downloads are legitimately long-running. Per-request
+		// upload idle timeouts are enforced in the streaming handler.
+		ReadHeaderTimeout: 15 * time.Second,
+		IdleTimeout:       120 * time.Second,
+	}
+	if err := httpSrv.ListenAndServe(); err != nil {
 		slog.Error("http server stopped", "err", err)
 		os.Exit(1)
 	}

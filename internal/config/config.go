@@ -11,10 +11,10 @@ import (
 )
 
 type Config struct {
-	Listen    string `yaml:"listen"`     // e.g. ":3000"
-	PublicURL string `yaml:"public_url"` // e.g. "https://brs.degmods.com"
-	DataDir   string `yaml:"data_dir"`   // where the identity key lives
-	Backend   string `yaml:"backend"`    // storage backend: "r2" (default) | "s3" | "disk"
+	Listen    string   `yaml:"listen"`     // e.g. ":3000"
+	PublicURL string   `yaml:"public_url"` // e.g. "https://brs.degmods.com"
+	DataDir   string   `yaml:"data_dir"`   // where the identity key lives
+	Backend   string   `yaml:"backend"`    // storage backend: "r2" (default) | "s3" | "disk"
 	R2        R2       `yaml:"r2"`
 	S3        S3       `yaml:"s3"`
 	Disk      Disk     `yaml:"disk"`
@@ -53,11 +53,12 @@ type Relay struct {
 }
 
 type Upload struct {
-	MaxSizeMB     int    `yaml:"max_size_mb"`     // hard cap per blob (default 500)
-	MaxConcurrent int    `yaml:"max_concurrent"`  // global simultaneous uploads (default 4)
-	TempDir       string `yaml:"temp_dir"`        // temp spool dir (default: OS temp)
-	MinPoW        int    `yaml:"min_pow"`         // NIP-13 bits required on the 24242 auth event (0 = off)
-	MinFreeDiskMB int64  `yaml:"min_free_disk_mb"` // refuse uploads below this free space (default 1024)
+	MaxSizeMB      int    `yaml:"max_size_mb"`      // hard cap per blob (default 500)
+	MaxConcurrent  int    `yaml:"max_concurrent"`   // global simultaneous uploads (default 4)
+	TempDir        string `yaml:"temp_dir"`         // temp spool dir (default: OS temp)
+	MinPoW         int    `yaml:"min_pow"`          // NIP-13 bits required on the 24242 auth event (0 = off)
+	MinFreeDiskMB  int64  `yaml:"min_free_disk_mb"` // refuse uploads below this free space (default 1024)
+	IdleTimeoutSec int    `yaml:"idle_timeout_sec"` // abort an upload after this many seconds with no data (default 60)
 }
 
 type R2 struct {
@@ -72,8 +73,8 @@ type R2 struct {
 // S3 configures a self-hosted S3-compatible backend (MinIO, Garage, Ceph, …).
 // Like R2 it is content-addressed; most self-hosted servers want path-style URLs.
 type S3 struct {
-	Endpoint  string `yaml:"endpoint"`   // host[:port], no scheme
-	Region    string `yaml:"region"`     // default "us-east-1"
+	Endpoint  string `yaml:"endpoint"` // host[:port], no scheme
+	Region    string `yaml:"region"`   // default "us-east-1"
 	Bucket    string `yaml:"bucket"`
 	AccessKey string `yaml:"access_key"`
 	SecretKey string `yaml:"secret_key"`
@@ -127,6 +128,9 @@ func Load(path string) (*Config, error) {
 	}
 	if c.Upload.MinFreeDiskMB == 0 {
 		c.Upload.MinFreeDiskMB = 1024
+	}
+	if c.Upload.IdleTimeoutSec == 0 {
+		c.Upload.IdleTimeoutSec = 60
 	}
 	if c.Download.ChallengeTTL == 0 {
 		c.Download.ChallengeTTL = 600

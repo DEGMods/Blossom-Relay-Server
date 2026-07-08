@@ -104,7 +104,7 @@ func verifyZip(f *os.File) error {
 		return errors.New("only .zip files are accepted")
 	}
 	// General-purpose bit flag at offset 6 (little-endian); bit 0 = encrypted.
-	if (uint16(hdr[6]) | uint16(hdr[7])<<8) &0x0001 != 0 {
+	if (uint16(hdr[6])|uint16(hdr[7])<<8)&0x0001 != 0 {
 		return errors.New("encrypted zip archives are not accepted")
 	}
 	return nil
@@ -129,6 +129,46 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+var (
+	errUploadTooLarge = errors.New("upload exceeds size limit")
+	errUploadStalled  = errors.New("upload stalled")
+)
+
+// streamBody copies the request body to dst, enforcing the size cap and an idle
+// timeout that resets on every chunk. Slow-but-steady uploads are fine (each chunk
+// resets the deadline); a stalled or trickle connection is aborted so it can't hold
+// a concurrency slot + temp file indefinitely.
+func (s *Server) streamBody(w http.ResponseWriter, r *http.Request, dst io.Writer) (int64, error) {
+	rc := http.NewResponseController(w)
+	buf := make([]byte, 128*1024)
+	var total int64
+	for {
+		if s.uploadIdleTimeout > 0 {
+			// Best-effort: some ResponseWriters (e.g. httptest) don't support deadlines.
+			_ = rc.SetReadDeadline(time.Now().Add(s.uploadIdleTimeout))
+		}
+		nr, er := r.Body.Read(buf)
+		if nr > 0 {
+			total += int64(nr)
+			if total > s.maxUploadBytes {
+				return total, errUploadTooLarge
+			}
+			if _, ew := dst.Write(buf[:nr]); ew != nil {
+				return total, ew
+			}
+		}
+		if er == io.EOF {
+			return total, nil
+		}
+		if er != nil {
+			if os.IsTimeout(er) {
+				return total, errUploadStalled
+			}
+			return total, er
+		}
+	}
 }
 
 // ── handlers ─────────────────────────────────────────────────────────────────
@@ -208,15 +248,20 @@ func (s *Server) handleUploadPut(w http.ResponseWriter, r *http.Request) {
 	tmpName := tmp.Name()
 	defer func() { tmp.Close(); os.Remove(tmpName) }()
 
-	// Stream → temp file + hasher, hard-capped in case Content-Length lied.
+	// Stream → temp file + hasher, hard-capped in case Content-Length lied, with an
+	// idle timeout so a stalled or trickle upload can't hold a slot/temp file forever.
 	h := sha256.New()
-	n, err := io.Copy(io.MultiWriter(tmp, h), io.LimitReader(r.Body, s.maxUploadBytes+1))
-	if err != nil {
-		httpErr(w, http.StatusBadRequest, "error reading upload")
+	n, err := s.streamBody(w, r, io.MultiWriter(tmp, h))
+	if err == errUploadTooLarge {
+		httpErr(w, http.StatusRequestEntityTooLarge, "file exceeds the size limit")
 		return
 	}
-	if n > s.maxUploadBytes {
-		httpErr(w, http.StatusRequestEntityTooLarge, "file exceeds the size limit")
+	if err == errUploadStalled {
+		httpErr(w, http.StatusRequestTimeout, "upload stalled (no data received) — aborted")
+		return
+	}
+	if err != nil {
+		httpErr(w, http.StatusBadRequest, "error reading upload")
 		return
 	}
 

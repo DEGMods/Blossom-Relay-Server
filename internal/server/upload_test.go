@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strconv"
 	"sync"
 	"testing"
@@ -45,9 +46,23 @@ func (f *fakeStorage) Stat(context.Context, string, string) (storage.StatInfo, e
 	return storage.StatInfo{}, storage.ErrNotFound
 }
 
+// tempDataDir returns a temp dir for the node's badger store with best-effort
+// cleanup. t.TempDir's strict RemoveAll fails on Windows when badger hasn't
+// released its file handles the instant after Close; we ignore that (the OS
+// reclaims it) so it doesn't flake the suite.
+func tempDataDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "degnode-test-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
+}
+
 func testServer(t *testing.T, fs storage.Storage) *Server {
 	t.Helper()
-	cfg := &config.Config{PublicURL: "https://test.example", DataDir: t.TempDir()}
+	cfg := &config.Config{PublicURL: "https://test.example", DataDir: tempDataDir(t)}
 	cfg.Upload.MaxSizeMB = 500
 	cfg.Upload.MaxConcurrent = 4
 	cfg.Upload.TempDir = "" // handler uses os temp via CreateTemp(dir="")

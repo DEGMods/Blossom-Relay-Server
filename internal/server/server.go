@@ -32,16 +32,17 @@ type Server struct {
 	handler http.Handler
 	store   *badger.BadgerBackend
 
-	storage        storage.Storage
-	publicURL      string
-	tempDir        string
-	maxUploadBytes int64
-	minFreeDiskMB  int64
-	minUploadPoW   int
-	minEventPoW    int
-	limiter        *uploadLimiter
-	block          *blocklist
-	adminPubkey    string // hex; the only key allowed to delete blobs (moderation)
+	storage           storage.Storage
+	publicURL         string
+	tempDir           string
+	maxUploadBytes    int64
+	minFreeDiskMB     int64
+	uploadIdleTimeout time.Duration
+	minUploadPoW      int
+	minEventPoW       int
+	limiter           *uploadLimiter
+	block             *blocklist
+	adminPubkey       string // hex; the only key allowed to delete blobs (moderation)
 
 	// download gates (BUD-POW + BUD-Ads)
 	powDifficulty   int
@@ -85,19 +86,20 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 	}
 
 	s := &Server{
-		relay:          relay,
-		bl:             bl,
-		store:          store,
-		storage:        st,
-		publicURL:      cfg.PublicURL,
-		tempDir:        cfg.Upload.TempDir,
-		maxUploadBytes: int64(cfg.Upload.MaxSizeMB) * 1024 * 1024,
-		minFreeDiskMB:  cfg.Upload.MinFreeDiskMB,
-		minUploadPoW:   cfg.Upload.MinPoW,
-		minEventPoW:    cfg.Relay.MinEventPoW,
-		limiter:        newUploadLimiter(cfg.Upload.MaxConcurrent),
-		block:          loadBlocklist(filepath.Join(cfg.DataDir, "blocklist.json")),
-		adminPubkey:    resolvePubkey(cfg.Relay.AdminNpub),
+		relay:             relay,
+		bl:                bl,
+		store:             store,
+		storage:           st,
+		publicURL:         cfg.PublicURL,
+		tempDir:           cfg.Upload.TempDir,
+		maxUploadBytes:    int64(cfg.Upload.MaxSizeMB) * 1024 * 1024,
+		minFreeDiskMB:     cfg.Upload.MinFreeDiskMB,
+		uploadIdleTimeout: time.Duration(cfg.Upload.IdleTimeoutSec) * time.Second,
+		minUploadPoW:      cfg.Upload.MinPoW,
+		minEventPoW:       cfg.Relay.MinEventPoW,
+		limiter:           newUploadLimiter(cfg.Upload.MaxConcurrent),
+		block:             loadBlocklist(filepath.Join(cfg.DataDir, "blocklist.json")),
+		adminPubkey:       resolvePubkey(cfg.Relay.AdminNpub),
 
 		powDifficulty:   cfg.Download.PoWDifficulty,
 		challengeTTL:    time.Duration(cfg.Download.ChallengeTTL) * time.Second,

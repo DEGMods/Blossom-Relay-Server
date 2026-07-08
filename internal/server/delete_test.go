@@ -34,7 +34,7 @@ func TestDelete_AdminOnly(t *testing.T) {
 	adminPK, _ := nostr.GetPublicKey(adminSK)
 
 	fs := &fakeStorage{stored: map[string][]byte{}}
-	cfg := &config.Config{PublicURL: "https://test.example", DataDir: t.TempDir()}
+	cfg := &config.Config{PublicURL: "https://test.example", DataDir: tempDataDir(t)}
 	cfg.Upload.MaxSizeMB = 500
 	cfg.Upload.MaxConcurrent = 4
 	cfg.Relay.AdminNpub = adminPK // hex pubkey; resolvePubkey passes it through
