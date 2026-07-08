@@ -104,4 +104,18 @@ func (s *Server) setupRelay(store *badger.BadgerBackend, adminPubkey string) {
 	m.BanPubKey = func(ctx context.Context, pubkey, reason string) error { return s.block.ban(pubkey, reason) }
 	m.AllowPubKey = func(ctx context.Context, pubkey, reason string) error { return s.block.allow(pubkey) }
 	m.ListBannedPubKeys = func(ctx context.Context) ([]nip86.PubKeyReason, error) { return s.block.list(), nil }
+	// Event takedown: delete the event from the store. (A determined author could
+	// re-publish; ban the pubkey for a persistent block.)
+	m.BanEvent = func(ctx context.Context, id, reason string) error {
+		ch, err := store.QueryEvents(ctx, nostr.Filter{IDs: []string{id}})
+		if err != nil {
+			return err
+		}
+		for evt := range ch {
+			if derr := store.DeleteEvent(ctx, evt); derr != nil {
+				return derr
+			}
+		}
+		return nil
+	}
 }
