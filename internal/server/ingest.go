@@ -56,10 +56,20 @@ func (s *Server) RunIngest(ctx context.Context, relays []string) {
 	slog.Info("ingest stopped", "stored", stored, "seen", seen)
 }
 
-// backfill pulls the full history for a filter by paginating backward in windows
-// (relays cap how much they return at once), storing every valid event.
+// backfill pulls the full history for a filter, paginating each relay INDEPENDENTLY.
+// (A shared cursor across relays breaks when relays hold different date ranges: one
+// relay's single ancient event would jump the cursor past another relay's middle
+// range, silently skipping it.)
 func (s *Server) backfill(ctx context.Context, pool *nostr.SimplePool, relays []string, filter nostr.Filter) {
+	for _, relay := range relays {
+		s.backfillRelay(ctx, pool, relay, filter)
+	}
+}
+
+// backfillRelay paginates a single relay backward in windows until exhausted.
+func (s *Server) backfillRelay(ctx context.Context, pool *nostr.SimplePool, relay string, filter nostr.Filter) {
 	const window = 500
+	one := []string{relay}
 	until := nostr.Now()
 	for {
 		if ctx.Err() != nil {
@@ -71,7 +81,7 @@ func (s *Server) backfill(ctx context.Context, pool *nostr.SimplePool, relays []
 
 		got, stored := 0, 0
 		oldest := until
-		for re := range pool.FetchMany(ctx, relays, f) {
+		for re := range pool.FetchMany(ctx, one, f) {
 			evt := re.Event
 			if evt == nil {
 				continue
@@ -90,7 +100,7 @@ func (s *Server) backfill(ctx context.Context, pool *nostr.SimplePool, relays []
 				stored++
 			}
 		}
-		slog.Info("ingest backfill window", "kinds", filter.Kinds, "fetched", got, "stored", stored)
+		slog.Info("ingest backfill window", "relay", relay, "kinds", filter.Kinds, "fetched", got, "stored", stored)
 		// Stop when a window returns nothing, or we can't move further back.
 		if got == 0 || oldest >= until {
 			return
