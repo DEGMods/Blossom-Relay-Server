@@ -115,6 +115,52 @@ func TestAdmin_BlobsPaginationAndSearch(t *testing.T) {
 	}
 }
 
+func TestAdmin_BlobsFilterAndSort(t *testing.T) {
+	stored := map[string][]byte{
+		strings.Repeat("a", 64) + ".zip": make([]byte, 3),
+		strings.Repeat("b", 64) + ".png": make([]byte, 10),
+		strings.Repeat("c", 64) + ".zip": make([]byte, 1),
+	}
+	srv, adminSK := adminServer(t, &fakeStorage{stored: stored})
+
+	get := func(query string) map[string]any {
+		req := httptest.NewRequest(http.MethodGet, "/admin/blobs?"+query, nil)
+		req.Header.Set("Authorization", nip98(t, adminSK, "GET", "https://test.example/admin/blobs?"+query, nostr.Now()))
+		w := httptest.NewRecorder()
+		srv.Handler().ServeHTTP(w, req)
+		if w.Code != http.StatusOK {
+			t.Fatalf("%q: want 200, got %d", query, w.Code)
+		}
+		var out map[string]any
+		json.Unmarshal(w.Body.Bytes(), &out)
+		return out
+	}
+
+	// Distinct types advertised, sorted.
+	all := get("")
+	types := all["types"].([]any)
+	if len(types) != 2 || types[0] != "png" || types[1] != "zip" {
+		t.Fatalf("types = %v, want [png zip]", types)
+	}
+
+	// Filter to zip only.
+	if n := get("ext=zip")["total"].(float64); n != 2 {
+		t.Fatalf("ext=zip total = %v, want 2", n)
+	}
+
+	// Sort by size descending → largest first (the 10-byte png).
+	top := get("sort=size&dir=desc")["blobs"].([]any)[0].(map[string]any)
+	if top["size"].(float64) != 10 {
+		t.Fatalf("size desc top = %v, want 10", top["size"])
+	}
+
+	// Combine: zip only, largest first → the 3-byte zip.
+	topZip := get("ext=zip&sort=size&dir=desc")["blobs"].([]any)[0].(map[string]any)
+	if topZip["size"].(float64) != 3 {
+		t.Fatalf("zip size desc top = %v, want 3", topZip["size"])
+	}
+}
+
 func TestAdmin_Whitelist(t *testing.T) {
 	srv, adminSK := adminServer(t, &fakeStorage{stored: map[string][]byte{}})
 	targetPK, _ := nostr.GetPublicKey(nostr.GeneratePrivateKey())

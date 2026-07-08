@@ -53,12 +53,13 @@ type Relay struct {
 }
 
 type Upload struct {
-	MaxSizeMB      int    `yaml:"max_size_mb"`      // hard cap per blob (default 500)
-	MaxConcurrent  int    `yaml:"max_concurrent"`   // global simultaneous uploads (default 4)
-	TempDir        string `yaml:"temp_dir"`         // temp spool dir (default: OS temp)
-	MinPoW         int    `yaml:"min_pow"`          // NIP-13 bits required on the 24242 auth event (0 = off)
-	MinFreeDiskMB  int64  `yaml:"min_free_disk_mb"` // refuse uploads below this free space (default 1024)
-	IdleTimeoutSec int    `yaml:"idle_timeout_sec"` // abort an upload after this many seconds with no data (default 60)
+	MaxSizeMB         int    `yaml:"max_size_mb"`          // hard cap per blob (default 500)
+	MaxConcurrent     int    `yaml:"max_concurrent"`       // global simultaneous uploads (default 4)
+	TempDir           string `yaml:"temp_dir"`             // temp spool dir (default: OS temp)
+	MinPoW            int    `yaml:"min_pow"`              // NIP-13 bits required on the 24242 auth event (0 = off)
+	MinFreeDiskMB     int64  `yaml:"min_free_disk_mb"`     // refuse uploads below this free space (default 1024)
+	IdleTimeoutSec    int    `yaml:"idle_timeout_sec"`     // abort an upload after this many seconds with no data (default 60)
+	MinUploadRateKBps int    `yaml:"min_upload_rate_kbps"` // abort an upload averaging below this over a 5s window (default 50; negative = off)
 }
 
 type R2 struct {
@@ -131,6 +132,9 @@ func Load(path string) (*Config, error) {
 	}
 	if c.Upload.IdleTimeoutSec == 0 {
 		c.Upload.IdleTimeoutSec = 60
+	}
+	if c.Upload.MinUploadRateKBps == 0 {
+		c.Upload.MinUploadRateKBps = 50
 	}
 	if c.Download.ChallengeTTL == 0 {
 		c.Download.ChallengeTTL = 600

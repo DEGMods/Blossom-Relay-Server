@@ -39,6 +39,7 @@ type Server struct {
 	maxUploadBytes    int64
 	minFreeDiskMB     int64
 	uploadIdleTimeout time.Duration
+	minUploadRateBps  int64 // 0 = off
 	minUploadPoW      int
 	minEventPoW       int
 	limiter           *uploadLimiter
@@ -102,6 +103,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		maxUploadBytes:    int64(cfg.Upload.MaxSizeMB) * 1024 * 1024,
 		minFreeDiskMB:     cfg.Upload.MinFreeDiskMB,
 		uploadIdleTimeout: time.Duration(cfg.Upload.IdleTimeoutSec) * time.Second,
+		minUploadRateBps:  int64(maxInt(cfg.Upload.MinUploadRateKBps, 0)) * 1024,
 		minUploadPoW:      cfg.Upload.MinPoW,
 		minEventPoW:       cfg.Relay.MinEventPoW,
 		limiter:           newUploadLimiter(cfg.Upload.MaxConcurrent),

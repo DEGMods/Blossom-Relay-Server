@@ -9,6 +9,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"time"
 )
 
 // ErrNotFound is returned when a blob does not exist.
@@ -32,10 +33,11 @@ type StatInfo struct {
 // BlobInfo is a listed object (name + size). Content-addressed stores hold only
 // names + sizes here, so the full listing is small enough to paginate in memory.
 type BlobInfo struct {
-	Key  string // "<sha256>.<ext>"
-	Hash string // sha256 (the key without extension)
-	Ext  string // extension without the dot, e.g. "zip"
-	Size int64
+	Key      string // "<sha256>.<ext>"
+	Hash     string // sha256 (the key without extension)
+	Ext      string // extension without the dot, e.g. "zip"
+	Size     int64
+	Modified time.Time // last-modified / added time (zero if unknown)
 }
 
 // Storage is a content-addressed blob store.

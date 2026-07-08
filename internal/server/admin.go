@@ -97,13 +97,54 @@ func (s *Server) handleAdminBlobs(w http.ResponseWriter, r *http.Request) {
 
 	q := r.URL.Query()
 	search := strings.ToLower(strings.TrimSpace(q.Get("search")))
-	filtered := make([]storage.BlobInfo, 0, len(all))
+
+	// Distinct types across the whole library (for the client's filter toggles),
+	// and the requested type filter (comma-separated, e.g. "zip,png").
+	typeSet := map[string]struct{}{}
 	for _, b := range all {
-		if search == "" || strings.Contains(strings.ToLower(b.Hash), search) {
-			filtered = append(filtered, b)
+		if b.Ext != "" {
+			typeSet[strings.ToLower(b.Ext)] = struct{}{}
 		}
 	}
-	sort.Slice(filtered, func(i, j int) bool { return filtered[i].Hash < filtered[j].Hash })
+	types := make([]string, 0, len(typeSet))
+	for t := range typeSet {
+		types = append(types, t)
+	}
+	sort.Strings(types)
+
+	wantExt := map[string]bool{}
+	for _, e := range strings.Split(q.Get("ext"), ",") {
+		if e = strings.ToLower(strings.TrimSpace(e)); e != "" {
+			wantExt[e] = true
+		}
+	}
+
+	filtered := make([]storage.BlobInfo, 0, len(all))
+	for _, b := range all {
+		if search != "" && !strings.Contains(strings.ToLower(b.Hash), search) {
+			continue
+		}
+		if len(wantExt) > 0 && !wantExt[strings.ToLower(b.Ext)] {
+			continue
+		}
+		filtered = append(filtered, b)
+	}
+
+	// Sort by the requested field/direction (default: hash, ascending).
+	desc := strings.EqualFold(q.Get("dir"), "desc")
+	less := func(i, j int) bool { return filtered[i].Hash < filtered[j].Hash }
+	switch strings.ToLower(q.Get("sort")) {
+	case "size":
+		less = func(i, j int) bool { return filtered[i].Size < filtered[j].Size }
+	case "date":
+		less = func(i, j int) bool { return filtered[i].Modified.Before(filtered[j].Modified) }
+	}
+	sort.SliceStable(filtered, func(i, j int) bool {
+		if desc {
+			return less(j, i)
+		}
+		return less(i, j)
+	})
 
 	per := clampInt(atoiOr(q.Get("per"), 50), 1, 200)
 	total := len(filtered)
@@ -116,17 +157,22 @@ func (s *Server) handleAdminBlobs(w http.ResponseWriter, r *http.Request) {
 	end := minInt(start+per, total)
 
 	type blobDTO struct {
-		Hash string `json:"hash"`
-		Ext  string `json:"ext"`
-		Size int64  `json:"size"`
-		URL  string `json:"url"`
+		Hash  string `json:"hash"`
+		Ext   string `json:"ext"`
+		Size  int64  `json:"size"`
+		URL   string `json:"url"`
+		Added int64  `json:"added"` // unix seconds; 0 if unknown
 	}
 	items := make([]blobDTO, 0, end-start)
 	for _, b := range filtered[start:end] {
-		items = append(items, blobDTO{Hash: b.Hash, Ext: b.Ext, Size: b.Size, URL: s.publicURL + "/" + b.Key})
+		added := int64(0)
+		if !b.Modified.IsZero() {
+			added = b.Modified.Unix()
+		}
+		items = append(items, blobDTO{Hash: b.Hash, Ext: b.Ext, Size: b.Size, URL: s.publicURL + "/" + b.Key, Added: added})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"total": total, "page": page, "per": per, "pages": pages, "blobs": items,
+		"total": total, "page": page, "per": per, "pages": pages, "types": types, "blobs": items,
 	})
 }
 

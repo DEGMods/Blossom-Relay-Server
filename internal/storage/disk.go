@@ -169,7 +169,7 @@ func (d *Disk) List(_ context.Context) ([]BlobInfo, error) {
 				continue
 			}
 			hash, ext := splitKey(e.Name())
-			out = append(out, BlobInfo{Key: e.Name(), Hash: hash, Ext: ext, Size: info.Size()})
+			out = append(out, BlobInfo{Key: e.Name(), Hash: hash, Ext: ext, Size: info.Size(), Modified: info.ModTime()})
 		}
 	}
 	return out, nil

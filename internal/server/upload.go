@@ -134,7 +134,11 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 var (
 	errUploadTooLarge = errors.New("upload exceeds size limit")
 	errUploadStalled  = errors.New("upload stalled")
+	errUploadTooSlow  = errors.New("upload too slow")
 )
+
+// rateWindow is the interval over which minimum upload throughput is measured.
+const rateWindow = 5 * time.Second
 
 // uploadLimitFor returns the max upload size for a pubkey — 5× the normal cap for
 // whitelisted keys.
@@ -145,14 +149,20 @@ func (s *Server) uploadLimitFor(pubkey string) int64 {
 	return s.maxUploadBytes
 }
 
-// streamBody copies the request body to dst, enforcing the size cap and an idle
-// timeout that resets on every chunk. Slow-but-steady uploads are fine (each chunk
-// resets the deadline); a stalled or trickle connection is aborted so it can't hold
-// a concurrency slot + temp file indefinitely.
+// streamBody copies the request body to dst, enforcing the size cap, an idle
+// timeout (reset every chunk), and a minimum average throughput measured over a
+// rolling 5s window. A stalled or trickle connection is aborted so it can't hold a
+// concurrency slot + temp file indefinitely; slow-but-adequate uploads are fine.
 func (s *Server) streamBody(w http.ResponseWriter, r *http.Request, dst io.Writer, limit int64) (int64, error) {
 	rc := http.NewResponseController(w)
 	buf := make([]byte, 128*1024)
 	var total int64
+
+	// Bytes required each window to stay above the minimum rate (0 = no minimum).
+	windowMin := s.minUploadRateBps * int64(rateWindow/time.Second)
+	windowStart := time.Now()
+	var windowBytes int64
+
 	for {
 		if s.uploadIdleTimeout > 0 {
 			// Best-effort: some ResponseWriters (e.g. httptest) don't support deadlines.
@@ -161,12 +171,20 @@ func (s *Server) streamBody(w http.ResponseWriter, r *http.Request, dst io.Write
 		nr, er := r.Body.Read(buf)
 		if nr > 0 {
 			total += int64(nr)
+			windowBytes += int64(nr)
 			if total > limit {
 				return total, errUploadTooLarge
 			}
 			if _, ew := dst.Write(buf[:nr]); ew != nil {
 				return total, ew
 			}
+		}
+		if windowMin > 0 && time.Since(windowStart) >= rateWindow {
+			if windowBytes < windowMin {
+				return total, errUploadTooSlow
+			}
+			windowStart = time.Now()
+			windowBytes = 0
 		}
 		if er == io.EOF {
 			return total, nil
@@ -268,6 +286,10 @@ func (s *Server) handleUploadPut(w http.ResponseWriter, r *http.Request) {
 	}
 	if err == errUploadStalled {
 		httpErr(w, http.StatusRequestTimeout, "upload stalled (no data received) — aborted")
+		return
+	}
+	if err == errUploadTooSlow {
+		httpErr(w, http.StatusRequestTimeout, "upload too slow (below the minimum speed) — aborted")
 		return
 	}
 	if err != nil {

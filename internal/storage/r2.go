@@ -175,7 +175,7 @@ func (r *R2) List(ctx context.Context) ([]BlobInfo, error) {
 			return nil, obj.Err
 		}
 		hash, ext := splitKey(obj.Key)
-		out = append(out, BlobInfo{Key: obj.Key, Hash: hash, Ext: ext, Size: obj.Size})
+		out = append(out, BlobInfo{Key: obj.Key, Hash: hash, Ext: ext, Size: obj.Size, Modified: obj.LastModified})
 	}
 	return out, nil
 }
