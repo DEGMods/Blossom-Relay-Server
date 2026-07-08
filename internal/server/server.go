@@ -41,6 +41,7 @@ type Server struct {
 	minEventPoW    int
 	limiter        *uploadLimiter
 	block          *blocklist
+	adminPubkey    string // hex; the only key allowed to delete blobs (moderation)
 
 	// download gates (BUD-POW + BUD-Ads)
 	powDifficulty   int
@@ -96,6 +97,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		minEventPoW:    cfg.Relay.MinEventPoW,
 		limiter:        newUploadLimiter(cfg.Upload.MaxConcurrent),
 		block:          loadBlocklist(filepath.Join(cfg.DataDir, "blocklist.json")),
+		adminPubkey:    resolvePubkey(cfg.Relay.AdminNpub),
 
 		powDifficulty:   cfg.Download.PoWDifficulty,
 		challengeTTL:    time.Duration(cfg.Download.ChallengeTTL) * time.Second,
@@ -111,7 +113,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		go s.metricsSaver()
 	}
 
-	s.setupRelay(store, resolvePubkey(cfg.Relay.AdminNpub))
+	s.setupRelay(store, s.adminPubkey)
 
 	// Streaming /upload in front; everything else (blossom GET, relay WS, NIP-11,
 	// NIP-86) → the relay.
@@ -130,6 +132,9 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 			w.WriteHeader(http.StatusNoContent)
 		})
 	}
+	// Admin-only blob deletion (our streaming upload bypasses khatru's blob index,
+	// so we handle DELETE ourselves rather than via the relay's blossom handler).
+	mux.HandleFunc("DELETE /{hash}", s.handleDelete)
 	mux.Handle("/", s.gate(relay)) // BUD-POW/BUD-Ads gate on blob GET; pass-through otherwise
 	s.handler = mux
 

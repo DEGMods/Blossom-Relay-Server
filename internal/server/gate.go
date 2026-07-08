@@ -148,8 +148,8 @@ func (s *Server) parseToken(c string) ([]string, bool) {
 func setGateCORS(w http.ResponseWriter) {
 	h := w.Header()
 	h.Set("Access-Control-Allow-Origin", "*")
-	h.Set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS")
-	h.Set("Access-Control-Allow-Headers", "X-Blossom-Gate-Pow-Proof, X-Blossom-Gate-Ad-Proof, Range")
+	h.Set("Access-Control-Allow-Methods", "GET, HEAD, DELETE, OPTIONS")
+	h.Set("Access-Control-Allow-Headers", "Authorization, X-Blossom-Gate-Pow-Proof, X-Blossom-Gate-Ad-Proof, Range")
 	h.Set("Access-Control-Expose-Headers", "X-Blossom-Gate-Pow, X-Blossom-Gate-Ad, X-Reason, Accept-Ranges, Content-Length")
 }
 
