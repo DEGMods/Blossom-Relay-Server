@@ -39,3 +39,14 @@ announce:
   interval_hours: 6
   relays:
     - "wss://relay.degmods.com"
+
+ingest:
+  # Mirror every mod (31142) + legacy mod (30402 t=GameMod) from these relays into
+  # this node, so it becomes a complete mod DB clients can query in one place.
+  enabled: true
+  relays:
+    - "wss://relay.degmods.com"
+    - "wss://relay.damus.io"
+    - "wss://relay.primal.net"
+    - "wss://nos.lol"
+    - "wss://relay.nostr.band"
