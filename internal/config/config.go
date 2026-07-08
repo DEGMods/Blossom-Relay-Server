@@ -22,7 +22,15 @@ type Config struct {
 	Relay     Relay    `yaml:"relay"`
 	Download  Download `yaml:"download"`
 	Announce  Announce `yaml:"announce"`
+	Ingest    Ingest   `yaml:"ingest"`
 	Log       Log      `yaml:"log"`
+}
+
+// Ingest subscribes to other relays and stores every mod event they carry, so this
+// node becomes a comprehensive mirror/DB of all mods across the network.
+type Ingest struct {
+	Enabled bool     `yaml:"enabled"`
+	Relays  []string `yaml:"relays"` // relays to pull mod events from
 }
 
 // Log configures structured logging.

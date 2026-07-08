@@ -54,10 +54,12 @@ func main() {
 	}
 	defer srv.Close()
 
+	// Shared context for background workers (announce + ingest).
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	// Federation: announce this node's capabilities over Nostr (opt-in).
 	if cfg.Announce.Enabled && len(cfg.Announce.Relays) > 0 {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		pub := announce.New(announce.Node{
 			URL:         cfg.PublicURL,
 			Blossom:     true,
@@ -69,6 +71,12 @@ func main() {
 		}, id.SecretKey, cfg.Announce.Relays, time.Duration(cfg.Announce.IntervalHours)*time.Hour)
 		go pub.Run(ctx)
 		slog.Info("announce enabled", "relays", len(cfg.Announce.Relays), "interval_hours", cfg.Announce.IntervalHours)
+	}
+
+	// Ingest: mirror mod events from other relays into this node's store (opt-in).
+	if cfg.Ingest.Enabled && len(cfg.Ingest.Relays) > 0 {
+		go srv.RunIngest(ctx, cfg.Ingest.Relays)
+		slog.Info("ingest enabled", "relays", len(cfg.Ingest.Relays))
 	}
 
 	slog.Info("node listening",
