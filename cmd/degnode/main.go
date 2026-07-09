@@ -79,6 +79,9 @@ func main() {
 		slog.Info("ingest enabled", "relays", len(cfg.Ingest.Relays))
 	}
 
+	// Prune spent NIP-09 deletion events (their effect is persisted separately).
+	go srv.RunDeletionSweep(ctx)
+
 	slog.Info("node listening",
 		"addr", cfg.Listen, "storage", cfg.Backend, "public_url", cfg.PublicURL,
 		"pow_bits", cfg.Download.PoWDifficulty, "ad_gate", cfg.Download.AdGate)

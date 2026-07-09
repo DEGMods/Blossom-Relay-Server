@@ -46,7 +46,8 @@ type Server struct {
 	block             *blocklist
 	white             *whitelist
 	bannedEv          *bannedEvents
-	adminPubkey       string // hex; the only key allowed to delete blobs (moderation)
+	deletions         *deletions // author-initiated NIP-09 takedowns (persistent)
+	adminPubkey       string     // hex; the only key allowed to delete blobs (moderation)
 
 	// admin blob-listing cache (avoids a full storage scan on every page click)
 	blobCacheMu sync.Mutex
@@ -111,6 +112,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		block:             loadBlocklist(filepath.Join(cfg.DataDir, "blocklist.json")),
 		white:             loadWhitelist(filepath.Join(cfg.DataDir, "whitelist.json")),
 		bannedEv:          loadBannedEvents(filepath.Join(cfg.DataDir, "banned_events.json")),
+		deletions:         loadDeletions(filepath.Join(cfg.DataDir, "deletions.json")),
 		adminPubkey:       resolvePubkey(cfg.Relay.AdminNpub),
 
 		powDifficulty:   cfg.Download.PoWDifficulty,

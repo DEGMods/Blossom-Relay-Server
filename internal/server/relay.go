@@ -50,7 +50,18 @@ func (s *Server) rejectEvent(ctx context.Context, evt *nostr.Event) (bool, strin
 	if s.bannedEv.has(moderationKey(evt)) {
 		return true, "blocked: this event was removed by a moderator"
 	}
+	// An author's NIP-09 delete is persistent: reject re-stores (incl. re-ingest)
+	// of the deleted coordinate up to the deletion's timestamp. A newer revision at
+	// the same coordinate is still accepted (created_at moves past the record).
+	if dt := s.deletions.deletedAt(moderationKey(evt)); dt > 0 && int64(evt.CreatedAt) <= dt {
+		return true, "blocked: this event was deleted by its author"
+	}
 	switch evt.Kind {
+	case 5:
+		// NIP-09 deletion request. khatru applies its effect before this policy
+		// runs (see onDeletionOutcome); accept it so the author gets an OK and the
+		// deletion is retained (briefly — pruned by RunDeletionSweep).
+		return false, ""
 	case currentModKind:
 		if tagValue(evt, "d") == "" {
 			return true, "invalid: mod event is missing its d tag"
@@ -93,6 +104,8 @@ func (s *Server) setupRelay(store *badger.BadgerBackend, adminPubkey string) {
 
 	r.RejectEvent = append(r.RejectEvent, s.rejectEvent)
 	r.RejectFilter = append(r.RejectFilter, s.rejectFilter)
+	// Persist author-initiated NIP-09 deletions so re-ingest can't resurrect them.
+	r.OverwriteDeletionOutcome = append(r.OverwriteDeletionOutcome, s.onDeletionOutcome)
 
 	if adminPubkey == "" {
 		return // NIP-86 disabled when no admin configured
