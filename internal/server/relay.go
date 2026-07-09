@@ -86,7 +86,9 @@ func (s *Server) rejectFilter(ctx context.Context, filter nostr.Filter) (bool, s
 		return false, "" // querying everything → only mod events exist here
 	}
 	for _, k := range filter.Kinds {
-		if acceptedKind(k) {
+		// Mod kinds, plus this node's own ad inventory (the download-gate target),
+		// which we store and serve so the gate client can always read it here.
+		if acceptedKind(k) || k == adInventoryKind {
 			return false, ""
 		}
 	}

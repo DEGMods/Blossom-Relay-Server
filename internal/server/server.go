@@ -142,6 +142,11 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		s.metricsStop = make(chan struct{})
 		go s.metricsSaver()
 	}
+	// Make the last-published ad inventory queryable from brs itself (re-store in
+	// case the event DB is newer/empty than the persisted inventory file).
+	if _, ev := s.adInv.snapshot(); ev != nil {
+		_ = store.ReplaceEvent(context.Background(), ev)
+	}
 
 	s.setupRelay(store, s.adminPubkey)
 

@@ -17,7 +17,10 @@ import (
 // admin can't publish it via NIP-07 — instead they submit the ad list to this
 // admin API and the node signs + publishes it with its own key.
 
-const adInventoryDTag = "manual-blossom-ads"
+const (
+	adInventoryKind = 30078 // NIP-78 application-specific data
+	adInventoryDTag = "manual-blossom-ads"
+)
 
 // adItem is one ad in the inventory (mirrors the client's Ad shape in gate.ts).
 type adItem struct {
@@ -92,7 +95,7 @@ func buildAdInventoryEvent(ads []adItem, secretKey string, createdAt nostr.Times
 		return nil, err
 	}
 	ev := &nostr.Event{
-		Kind:      30078,
+		Kind:      adInventoryKind,
 		CreatedAt: createdAt,
 		Tags:      nostr.Tags{{"d", adInventoryDTag}},
 		Content:   string(content),
@@ -166,6 +169,10 @@ func (s *Server) handleAdminAdsPut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusInternalServerError, "failed to sign inventory event")
 		return
 	}
+	// Store it in our own event store so brs serves the inventory directly — the
+	// download gate's client always connects here, so this is the reliable source
+	// (rejectFilter allows this one kind for reads). Also publish to external relays.
+	_ = s.store.ReplaceEvent(r.Context(), ev)
 	published := publishEvent(r.Context(), ev, s.adPublishRelays)
 	if err := s.adInv.store(ads, ev); err != nil {
 		httpErr(w, http.StatusInternalServerError, "failed to persist inventory")

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -114,5 +115,30 @@ func TestAds_AdminPutThenGet(t *testing.T) {
 	}
 	if resp.Event == nil || resp.Event.PubKey != nodePK {
 		t.Fatal("GET should return the node-signed inventory event")
+	}
+
+	// The inventory must be queryable from brs's own store (the gate client reads
+	// it here), and rejectFilter must permit that kind.
+	if rej, _ := srv.rejectFilter(context.Background(), nostr.Filter{Kinds: []int{adInventoryKind}}); rej {
+		t.Fatal("rejectFilter must allow reading the ad inventory kind")
+	}
+	ch, err := srv.store.QueryEvents(context.Background(), nostr.Filter{
+		Kinds:   []int{adInventoryKind},
+		Authors: []string{nodePK},
+		Tags:    nostr.TagMap{"d": []string{adInventoryDTag}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored := <-ch; stored == nil {
+		t.Fatal("inventory event must be stored in brs so the relay can serve it")
+	}
+}
+
+func TestAds_RejectFilterStillMostlyModOnly(t *testing.T) {
+	srv := testServer(t, &fakeStorage{stored: map[string][]byte{}})
+	// A random non-mod, non-inventory kind stays rejected.
+	if rej, _ := srv.rejectFilter(context.Background(), nostr.Filter{Kinds: []int{1}}); !rej {
+		t.Fatal("non-mod, non-inventory kinds must still be rejected")
 	}
 }
