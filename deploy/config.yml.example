@@ -50,3 +50,11 @@ ingest:
     - "wss://relay.primal.net"
     - "wss://nos.lol"
     - "wss://relay.nostr.band"
+
+ads:
+  # Relays the node publishes its ad inventory to (the BUD-Ads gate target,
+  # 30078:<node-pubkey>:manual-blossom-ads). Clients must be able to read these.
+  # Edit the ad list from the client's Settings → Admin → Ads tab; the node signs
+  # and publishes it with its own key. Defaults to announce.relays when omitted.
+  publish_relays:
+    - "wss://relay.degmods.com"

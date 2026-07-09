@@ -54,7 +54,7 @@ func (s *Server) verifyAdmin(r *http.Request) error {
 func setAdminCORS(w http.ResponseWriter) {
 	h := w.Header()
 	h.Set("Access-Control-Allow-Origin", "*")
-	h.Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
+	h.Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 	h.Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
 	h.Set("Access-Control-Expose-Headers", "X-Reason")
 }

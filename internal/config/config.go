@@ -23,7 +23,16 @@ type Config struct {
 	Download  Download `yaml:"download"`
 	Announce  Announce `yaml:"announce"`
 	Ingest    Ingest   `yaml:"ingest"`
+	Ads       Ads      `yaml:"ads"`
 	Log       Log      `yaml:"log"`
+}
+
+// Ads controls where the node publishes its NIP-78 ad inventory — the event the
+// BUD-Ads download gate references (30078:<node-pubkey>:manual-blossom-ads). The
+// admin edits the inventory through the admin API; the node signs it with its own
+// key and publishes it to these relays (which clients must be able to read).
+type Ads struct {
+	PublishRelays []string `yaml:"publish_relays"` // defaults to announce.relays when empty
 }
 
 // Ingest subscribes to other relays and stores every mod event they carry, so this

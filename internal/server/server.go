@@ -64,6 +64,11 @@ type Server struct {
 	adRef           string
 	metrics         *adMetrics
 	metricsStop     chan struct{}
+
+	// ad inventory (NIP-78, signed by the node key) — the BUD-Ads gate target
+	nodeSeckey      string // node secret key (hex); signs the ad inventory event
+	adPublishRelays []string
+	adInv           *adInventory
 }
 
 // New builds the node's HTTP handler (streaming upload + blossom + mod relay).
@@ -121,9 +126,18 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		gateKey:         deriveGateKey(gateSecret),
 		adGate:          cfg.Download.AdGate,
 		adMinMs:         cfg.Download.AdMinMs,
+
+		nodeSeckey:      gateSecret, // the node's secret key (also seeds the gate HMAC)
+		adPublishRelays: cfg.Ads.PublishRelays,
+		adInv:           loadAdInventory(filepath.Join(cfg.DataDir, "ads_inventory.json")),
+	}
+	// The ad inventory lives at this coordinate regardless of whether the gate is
+	// currently enforced, so the admin can set ads up before turning the gate on.
+	s.adRef = "30078:" + nodePubkey + ":" + adInventoryDTag
+	if len(s.adPublishRelays) == 0 {
+		s.adPublishRelays = cfg.Announce.Relays // sensible default: same relays we announce to
 	}
 	if s.adGate {
-		s.adRef = "30078:" + nodePubkey + ":manual-blossom-ads"
 		s.metrics = newAdMetrics(filepath.Join(cfg.DataDir, "ad_stats.json"))
 		s.metricsStop = make(chan struct{})
 		go s.metricsSaver()
@@ -157,6 +171,8 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 	mux.HandleFunc("GET /admin/banned-events", s.handleBannedEventsList)
 	mux.HandleFunc("POST /admin/banned-events", s.handleBanEvent)
 	mux.HandleFunc("DELETE /admin/banned-events", s.handleUnbanEvent)
+	mux.HandleFunc("GET /admin/ads", s.handleAdminAdsGet)
+	mux.HandleFunc("PUT /admin/ads", s.handleAdminAdsPut)
 	mux.HandleFunc("OPTIONS /admin/{rest...}", func(w http.ResponseWriter, r *http.Request) {
 		setAdminCORS(w)
 		w.WriteHeader(http.StatusNoContent)
