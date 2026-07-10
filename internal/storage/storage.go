@@ -1,7 +1,7 @@
 // Package storage is the blob backend abstraction. Blobs are content-addressed by
-// their lowercase hex SHA-256. Objects are keyed "<sha256>.<ext>" to match the
-// existing deg-blossom-storage bucket. The interface is backend-agnostic so the
-// same node runs against Cloudflare R2 today and local disk / MinIO / Garage later.
+// their lowercase hex SHA-256. Objects are keyed "<sha256>.<ext>". The interface is
+// backend-agnostic so the same node runs against Cloudflare R2, a self-hosted S3
+// (Garage / Ceph / …), or local disk without touching the rest of the server.
 package storage
 
 import (

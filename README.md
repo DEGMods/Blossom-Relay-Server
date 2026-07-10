@@ -25,7 +25,7 @@ Licensed **MIT** — anyone can run a node.
 - **Moderation** — NIP-86 pubkey ban/allow, plus persistent **address-based
   takedowns**: a `<kind>:<pubkey>:<d>` coordinate stays rejected even if it's later
   re-published or re-ingested.
-- **Pluggable storage** — Cloudflare R2, self-hosted S3 (MinIO / Garage / Ceph),
+- **Pluggable storage** — Cloudflare R2, self-hosted S3 (Garage / Ceph / SeaweedFS),
   or local disk. Cloud is one option, not a requirement.
 - **Download gates** — [BUD-POW](docs/specs/BUD-POW.md) (proof-of-work, anti-abuse)
   and [BUD-Ads](docs/specs/BUD-Ads.md) (ad view, funds the operator). Both use

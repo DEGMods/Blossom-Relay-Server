@@ -30,15 +30,18 @@ Two decisions up front, both changeable later:
 ## 1. Point your domain at the server
 
 1. Create the server (§0) and note its **public IPv4**.
-2. In your DNS provider, add an **A record**:
-   - Name: `brs` (for `brs.yourdomain.com`) — or `@` for the root domain.
-   - Value: the server's IP.
-   - **If your DNS is on Cloudflare, set the record to "DNS only" (grey cloud), not
-     "Proxied."** The node terminates HTTPS itself via Caddy; proxying breaks the
-     Let's Encrypt challenge and the real-client-IP used by the gates.
-3. Give it a few minutes. Your own machine may cache an old result — verify with a
-   global checker like [dnschecker.org](https://dnschecker.org) rather than a local
-   `nslookup`.
+2. At your **domain registrar / DNS host** (Namecheap, Porkbun, GoDaddy, etc.), open the
+   domain's DNS settings and add an **A record**:
+   - Host / Name: `brs` (for `brs.yourdomain.com`) — or `@` for the root domain.
+   - Value / Points to: the server's IP.
+   - TTL: automatic / default.
+3. Give DNS a few minutes to propagate. Your own machine may cache an old result —
+   verify with a global checker like [dnschecker.org](https://dnschecker.org) rather than
+   a local `nslookup`.
+
+> **Using Cloudflare for DNS?** Add the A record there but set it to **"DNS only" (grey
+> cloud), not "Proxied"** — the node terminates HTTPS itself, and proxying breaks the
+> certificate challenge and the real-client-IP the gates rely on.
 
 ---
 
@@ -58,14 +61,15 @@ Pick **one**.
 
 You'll use `backend: "r2"` with these values in §4.
 
-### 2B. Self-hosted S3 on the same box (MinIO)
+### 2B. Self-hosted S3 on the same box (Garage)
 
-Everything stays on one server — no cloud account. You'll add a MinIO service to the
-same Docker stack so the node reaches it privately over the internal network.
+Everything stays on one server — no cloud account. You'll add
+[Garage](https://garagehq.deuxfleurs.fr) (a lightweight, self-hostable, S3-compatible
+object store) to the same Docker stack, so the node reaches it privately over the
+internal network.
 
-You'll do this **during §4** (it's just an extra service in the compose file + a
-bucket). For a lighter-weight alternative, [Garage](https://garagehq.deuxfleurs.fr)
-is excellent but has a fiddlier first-run; MinIO is the simplest to get going.
+You'll set it up in §4 — an extra service in the compose file plus a one-time bucket +
+access key. A few more steps than a managed bucket, but nothing leaves your box.
 
 ---
 
@@ -103,8 +107,8 @@ R2_ACCESS_KEY=your-r2-access-key
 R2_SECRET_KEY=your-r2-secret-key
 ```
 
-For self-hosted MinIO, use `S3_ACCESS_KEY` / `S3_SECRET_KEY` instead (you'll set the
-values you create below).
+For self-hosted Garage, use `S3_ACCESS_KEY` / `S3_SECRET_KEY` instead (you'll paste the
+key Garage prints for you below).
 
 **Config → `config.yml`.** Edit at least:
 
@@ -129,40 +133,59 @@ r2:
   use_ssl: true
 ```
 
-**Self-hosted MinIO (same box):** add a `minio` service to `docker-compose.yml`:
+**Self-hosted Garage (same box).** Add a `garage` service to `docker-compose.yml`:
 
 ```yaml
-  minio:
-    image: minio/minio
+  garage:
+    image: dxflrs/garage:v1.0.1
     restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: "${S3_ACCESS_KEY}"
-      MINIO_ROOT_PASSWORD: "${S3_SECRET_KEY}"
     volumes:
-      - ./minio-data:/data
-    # Expose the console to localhost only; reach it via an SSH tunnel to create the bucket.
-    ports:
-      - "127.0.0.1:9001:9001"
+      - ./garage.toml:/etc/garage.toml:ro
+      - ./garage-meta:/var/lib/garage/meta
+      - ./garage-data:/var/lib/garage/data
 ```
 
-Put a username + a strong password in `.env` as `S3_ACCESS_KEY` / `S3_SECRET_KEY`,
-then set the node's storage block:
+Create `deploy/garage.toml` (generate the secret with `openssl rand -hex 32`):
+
+```toml
+metadata_dir = "/var/lib/garage/meta"
+data_dir     = "/var/lib/garage/data"
+db_engine    = "sqlite"
+replication_factor = 1
+
+rpc_bind_addr   = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret      = "PASTE_64_HEX_CHARS_HERE"
+
+[s3_api]
+s3_region     = "garage"
+api_bind_addr = "[::]:3900"
+```
+
+Start it, then initialise a single-node cluster + bucket + key (run these once):
+
+```bash
+docker compose up -d garage
+docker compose exec garage /garage status                 # note the node ID (first column)
+docker compose exec garage /garage layout assign -z dc1 -c 50G <NODE_ID>
+docker compose exec garage /garage layout apply --version 1
+docker compose exec garage /garage bucket create mods-storage
+docker compose exec garage /garage key create mods-key    # prints a Key ID + Secret — copy them
+docker compose exec garage /garage bucket allow --read --write mods-storage --key mods-key
+```
+
+Put the printed **Key ID / Secret** in `.env` as `S3_ACCESS_KEY` / `S3_SECRET_KEY`, then
+set the node's storage block:
 
 ```yaml
 backend: "s3"
 s3:
-  endpoint: "minio:9000"     # the compose service name; path-style
-  region: "us-east-1"
+  endpoint: "garage:3900"    # the compose service name; path-style
+  region: "garage"
   bucket: "mods-storage"
   use_ssl: false             # internal network, no TLS needed
+  path_style: true
 ```
-
-Create the bucket once: `docker compose up -d minio`, then open the console via an SSH
-tunnel — `ssh -L 9001:127.0.0.1:9001 user@YOUR_IP` and browse to
-`http://localhost:9001`, log in with the root creds, and create a bucket named
-`mods-storage`. (For tighter security you can create a bucket-scoped access key here and
-use that in `.env` instead of the root creds.)
 
 ---
 

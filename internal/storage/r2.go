@@ -12,7 +12,7 @@ import (
 )
 
 // R2Config configures an S3-compatible backend (Cloudflare R2 or self-hosted
-// MinIO/Garage/Ceph — the same minio client serves all of them).
+// Garage/Ceph/etc. — the same minio-go S3 client serves all of them).
 type R2Config struct {
 	Endpoint  string // host only, e.g. "<accountid>.r2.cloudflarestorage.com"
 	Region    string // "auto" for R2
@@ -20,7 +20,7 @@ type R2Config struct {
 	AccessKey string
 	SecretKey string
 	UseSSL    bool
-	PathStyle bool // force path-style URLs (MinIO/Garage); R2 uses virtual-host
+	PathStyle bool // force path-style URLs (most self-hosted S3); R2 uses virtual-host
 }
 
 // R2 is an S3-compatible blob store. Objects are keyed "<sha256>.<ext>" to match

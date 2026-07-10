@@ -91,7 +91,7 @@ type R2 struct {
 	UseSSL    bool   `yaml:"use_ssl"`
 }
 
-// S3 configures a self-hosted S3-compatible backend (MinIO, Garage, Ceph, …).
+// S3 configures a self-hosted S3-compatible backend (Garage, Ceph, SeaweedFS, …).
 // Like R2 it is content-addressed; most self-hosted servers want path-style URLs.
 type S3 struct {
 	Endpoint  string `yaml:"endpoint"` // host[:port], no scheme
@@ -100,7 +100,7 @@ type S3 struct {
 	AccessKey string `yaml:"access_key"`
 	SecretKey string `yaml:"secret_key"`
 	UseSSL    bool   `yaml:"use_ssl"`
-	PathStyle bool   `yaml:"path_style"` // MinIO/Garage typically need this
+	PathStyle bool   `yaml:"path_style"` // most self-hosted S3 servers need this
 }
 
 // Disk configures the local-disk backend (own hardware, no S3 at all).
