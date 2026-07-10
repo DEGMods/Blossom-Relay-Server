@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DEG-Mods/blossom-relay-server/internal/storage"
+	"github.com/DEGMods/Blossom-Relay-Server/internal/storage"
 	"github.com/nbd-wtf/go-nostr"
 )
 

@@ -59,7 +59,7 @@ docker compose up -d
 
 Full walkthrough — buy a server, set up storage (Cloudflare R2 **or** self-hosted
 S3), DNS, deploy, verify, and turn on gates — in the
-[deploy guide](DEPLOY-GUIDE.md).
+[deploy guide](docs/DEPLOY-GUIDE.md).
 
 ## Configuration
 

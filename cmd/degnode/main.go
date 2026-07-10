@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/DEG-Mods/blossom-relay-server/internal/announce"
-	"github.com/DEG-Mods/blossom-relay-server/internal/config"
-	"github.com/DEG-Mods/blossom-relay-server/internal/identity"
-	"github.com/DEG-Mods/blossom-relay-server/internal/server"
-	"github.com/DEG-Mods/blossom-relay-server/internal/storage"
+	"github.com/DEGMods/Blossom-Relay-Server/internal/announce"
+	"github.com/DEGMods/Blossom-Relay-Server/internal/config"
+	"github.com/DEGMods/Blossom-Relay-Server/internal/identity"
+	"github.com/DEGMods/Blossom-Relay-Server/internal/server"
+	"github.com/DEGMods/Blossom-Relay-Server/internal/storage"
 )
 
 func main() {

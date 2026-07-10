@@ -94,7 +94,7 @@ sudo ufw allow 22 && sudo ufw allow 80 && sudo ufw allow 443 && sudo ufw enable
 ## 4. Get the code and configure
 
 ```bash
-git clone https://github.com/DEG-Mods/blossom-relay-server ~/degnode
+git clone https://github.com/DEGMods/Blossom-Relay-Server ~/degnode
 cd ~/degnode/deploy
 cp .env.example .env
 cp config.yml.example config.yml
@@ -293,5 +293,5 @@ startup log to confirm it took effect.
   old/other host), and gates must be on (`pow_bits>0` or `ad_gate=true` in the startup
   log). Content-addressed files also cache in the browser — hard-refresh when testing.
 
-Full option docs: [`deploy/config.yml.example`](deploy/config.yml.example). Node internals
-and the admin API: [`README.md`](README.md).
+Full option docs: [`deploy/config.yml.example`](../deploy/config.yml.example). Node internals
+and the admin API: [`README.md`](../README.md).

@@ -4,7 +4,7 @@
 #
 # The first deploy builds the node image from the source in the parent dir.
 # Once you publish an image (e.g. to GHCR), replace the `build:` block with
-#   image: ghcr.io/degmods/node:latest
+#   image: ghcr.io/degmods/blossom-relay-server:latest
 # and a new operator can run THIS FILE ALONE — nothing else on their machine.
 services:
   node:

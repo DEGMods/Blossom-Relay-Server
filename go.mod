@@ -1,4 +1,4 @@
-module github.com/DEG-Mods/blossom-relay-server
+module github.com/DEGMods/Blossom-Relay-Server
 
 go 1.25.3
 

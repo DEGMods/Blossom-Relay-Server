@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/DEG-Mods/blossom-relay-server/internal/config"
-	"github.com/DEG-Mods/blossom-relay-server/internal/storage"
+	"github.com/DEGMods/Blossom-Relay-Server/internal/config"
+	"github.com/DEGMods/Blossom-Relay-Server/internal/storage"
 	"github.com/fiatjaf/eventstore/badger"
 	"github.com/fiatjaf/khatru"
 	"github.com/fiatjaf/khatru/blossom"
@@ -33,22 +33,22 @@ type Server struct {
 	handler http.Handler
 	store   *badger.BadgerBackend
 
-	storage           storage.Storage
-	publicURL         string
-	tempDir           string
-	maxUploadBytes    int64
-	minFreeDiskMB     int64
-	uploadIdleTimeout time.Duration
+	storage            storage.Storage
+	publicURL          string
+	tempDir            string
+	maxUploadBytes     int64
+	minFreeDiskMB      int64
+	uploadIdleTimeout  time.Duration
 	minUploadRateBps   int64 // 0 = off
 	minUploadPoW       int
 	allowedUploadTypes []string // accepted extensions (magic-detected); "*" = any
-	minEventPoW       int
-	limiter           *uploadLimiter
-	block             *blocklist
-	white             *whitelist
-	bannedEv          *bannedEvents
-	deletions         *deletions // author-initiated NIP-09 takedowns (persistent)
-	adminPubkey       string     // hex; the only key allowed to delete blobs (moderation)
+	minEventPoW        int
+	limiter            *uploadLimiter
+	block              *blocklist
+	white              *whitelist
+	bannedEv           *bannedEvents
+	deletions          *deletions // author-initiated NIP-09 takedowns (persistent)
+	adminPubkey        string     // hex; the only key allowed to delete blobs (moderation)
 
 	// admin blob-listing cache (avoids a full storage scan on every page click)
 	blobCacheMu sync.Mutex
@@ -102,25 +102,25 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 	}
 
 	s := &Server{
-		relay:             relay,
-		bl:                bl,
-		store:             store,
-		storage:           st,
-		publicURL:         cfg.PublicURL,
-		tempDir:           cfg.Upload.TempDir,
-		maxUploadBytes:    int64(cfg.Upload.MaxSizeMB) * 1024 * 1024,
-		minFreeDiskMB:     cfg.Upload.MinFreeDiskMB,
-		uploadIdleTimeout: time.Duration(cfg.Upload.IdleTimeoutSec) * time.Second,
+		relay:              relay,
+		bl:                 bl,
+		store:              store,
+		storage:            st,
+		publicURL:          cfg.PublicURL,
+		tempDir:            cfg.Upload.TempDir,
+		maxUploadBytes:     int64(cfg.Upload.MaxSizeMB) * 1024 * 1024,
+		minFreeDiskMB:      cfg.Upload.MinFreeDiskMB,
+		uploadIdleTimeout:  time.Duration(cfg.Upload.IdleTimeoutSec) * time.Second,
 		minUploadRateBps:   int64(maxInt(cfg.Upload.MinUploadRateKBps, 0)) * 1024,
 		minUploadPoW:       cfg.Upload.MinPoW,
 		allowedUploadTypes: cfg.Upload.AllowedTypes,
-		minEventPoW:       cfg.Relay.MinEventPoW,
-		limiter:           newUploadLimiter(cfg.Upload.MaxConcurrent),
-		block:             loadBlocklist(filepath.Join(cfg.DataDir, "blocklist.json")),
-		white:             loadWhitelist(filepath.Join(cfg.DataDir, "whitelist.json")),
-		bannedEv:          loadBannedEvents(filepath.Join(cfg.DataDir, "banned_events.json")),
-		deletions:         loadDeletions(filepath.Join(cfg.DataDir, "deletions.json")),
-		adminPubkey:       resolvePubkey(cfg.Relay.AdminNpub),
+		minEventPoW:        cfg.Relay.MinEventPoW,
+		limiter:            newUploadLimiter(cfg.Upload.MaxConcurrent),
+		block:              loadBlocklist(filepath.Join(cfg.DataDir, "blocklist.json")),
+		white:              loadWhitelist(filepath.Join(cfg.DataDir, "whitelist.json")),
+		bannedEv:           loadBannedEvents(filepath.Join(cfg.DataDir, "banned_events.json")),
+		deletions:          loadDeletions(filepath.Join(cfg.DataDir, "deletions.json")),
+		adminPubkey:        resolvePubkey(cfg.Relay.AdminNpub),
 
 		powDifficulty:   cfg.Download.PoWDifficulty,
 		challengeTTL:    time.Duration(cfg.Download.ChallengeTTL) * time.Second,

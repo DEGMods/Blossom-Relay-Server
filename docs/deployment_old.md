@@ -68,7 +68,7 @@ docker run --rm hello-world
 **Clone the repo** on the box:
 
 ```sh
-git clone https://github.com/DEG-Mods/blossom-relay-server.git ~/degnode
+git clone https://github.com/DEGMods/Blossom-Relay-Server.git ~/degnode
 cd ~/degnode/deploy
 cp .env.example .env
 cp config.yml.example config.yml
