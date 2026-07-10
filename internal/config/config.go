@@ -53,7 +53,7 @@ type Log struct {
 type Announce struct {
 	Enabled       bool     `yaml:"enabled"`
 	Relays        []string `yaml:"relays"`         // relays to publish the announcement to
-	IntervalHours int      `yaml:"interval_hours"` // republish cadence (default 6)
+	IntervalHours int      `yaml:"interval_hours"` // republish cadence in hours (default 168 = weekly)
 }
 
 type Download struct {
@@ -160,7 +160,7 @@ func Load(path string) (*Config, error) {
 		c.Download.AdMinMs = 1000
 	}
 	if c.Announce.IntervalHours == 0 {
-		c.Announce.IntervalHours = 6
+		c.Announce.IntervalHours = 168 // weekly
 	}
 	if c.Log.Level == "" {
 		c.Log.Level = "info"

@@ -35,10 +35,16 @@ download:
   ad_min_ms: 1000
 
 announce:
-  enabled: false                         # true to advertise this node for federation
-  interval_hours: 6
+  # Advertise this node over Nostr so other nodes/clients can discover it.
+  enabled: true
+  interval_hours: 168                    # re-publish weekly (7 days)
+  # Kept the same as ingest.relays so the node uses one relay set (fewer dup conns).
   relays:
-    - "wss://relay.degmods.com"
+    - "wss://relay.primal.net"
+    - "wss://nos.lol"
+    - "wss://relay.nostr.band"
+    - "wss://relay.snort.social"
+    - "wss://relay.wellorder.net"
 
 ingest:
   # Mirror every mod (31142) + legacy mod (30402 t=GameMod) from these relays into

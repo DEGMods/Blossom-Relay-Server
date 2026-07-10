@@ -16,7 +16,14 @@ Licensed **MIT** — anyone can run a node.
   can't overflow), `.zip`-only via magic bytes, kind-24242 auth, a global
   concurrency cap plus one in-flight upload per npub, and a free-disk check.
 - **Mod-scoped Nostr relay** — an embedded [badger](https://github.com/dgraph-io/badger)
-  event store, accepts only mod events, with NIP-86 admin (ban/allow).
+  event store that accepts only mod events (current kind `31142` + legacy `30402`
+  `GameMod` before a cutoff), enforces per-event proof-of-work (NIP-13), and honors
+  author deletions (NIP-09) **persistently** so a removed mod stays gone.
+- **Ingest / mirror** — optionally subscribes to other relays and stores every mod
+  they carry (current + legacy), so the node becomes a complete, one-stop mod DB.
+- **Moderation** — NIP-86 pubkey ban/allow, plus persistent **address-based
+  takedowns**: a `<kind>:<pubkey>:<d>` coordinate stays rejected even if it's later
+  re-published or re-ingested.
 - **Pluggable storage** — Cloudflare R2, self-hosted S3 (MinIO / Garage / Ceph),
   or local disk. Cloud is one option, not a requirement.
 - **Download gates** — [BUD-POW](docs/specs/BUD-POW.md) (proof-of-work, anti-abuse)
@@ -54,7 +61,7 @@ Full walkthrough — from a bare VPS to cutover — in the
 
 ## Configuration
 
-All options are documented in [`config.example.yml`](config.example.yml). Secrets
+All options are documented in [`deploy/config.yml.example`](deploy/config.yml.example). Secrets
 (R2/S3 keys) are read from the environment (`R2_ACCESS_KEY` / `R2_SECRET_KEY` or
 `S3_ACCESS_KEY` / `S3_SECRET_KEY`) so they stay out of the config file. Key knobs:
 
@@ -65,7 +72,9 @@ All options are documented in [`config.example.yml`](config.example.yml). Secret
 | `upload` | size cap, concurrency, min free disk, optional NIP-13 PoW |
 | `relay` | admin npub (NIP-86), min event PoW |
 | `download` | PoW difficulty, ad gate, trusted client-IP header |
-| `announce` | opt-in Nostr capability announcement (federation) |
+| `ingest` | mirror mods (current + legacy) from other relays into this node |
+| `ads` | relays the node publishes its BUD-Ads inventory to |
+| `announce` | Nostr capability announcement for federation (on by default, weekly) |
 | `log` | level + `text`/`json` format |
 
 On first run the node generates its identity and prints its `npub`; the `nsec` is
@@ -104,6 +113,12 @@ raw key on the server. All require `Authorization: Nostr <base64(event)>`.
 - `POST /admin/whitelist` `{ "pubkey", "note?" }` — grant a pubkey the **5× upload
   cap** (accepts npub or hex).
 - `DELETE /admin/whitelist` `{ "pubkey" }` — revoke it.
+- `GET|POST|DELETE /admin/banned-events` — persistent, **address-based** event
+  takedowns. A `<kind>:<pubkey>:<d>` coordinate stays rejected even if the mod is
+  later re-published or re-ingested from another relay.
+- `GET|PUT /admin/ads` — read/replace the BUD-Ads inventory. The node signs the
+  NIP-78 event (`30078:<node-pubkey>:manual-blossom-ads`) with **its own** key and
+  publishes it (so an admin can't sign it via NIP-07), then serves it from here.
 - `DELETE /<hash>` — remove a blob (admin-signed kind-24242 `t=delete`).
 
 Pubkey **bans** use the relay's NIP-86 API and are unified: a banned key can neither
@@ -114,9 +129,9 @@ post mod events nor upload blobs.
 Requires Go 1.25+.
 
 ```sh
-cp config.example.yml config.yml     # edit; set backend + endpoint
+cp deploy/config.yml.example config.yml   # edit; set backend + endpoint
 go run ./cmd/degnode -config config.yml
-go test ./...                        # unit tests (no cloud needed)
+go test ./...                             # unit tests (no cloud needed)
 ```
 
 ## Project layout
@@ -126,7 +141,8 @@ cmd/degnode        entrypoint (config load, storage factory, announce wiring)
 internal/config    YAML config (+ env overrides for secrets)
 internal/identity  node Nostr key (generated on first run)
 internal/storage   Storage interface + backends: r2.go (R2/S3), disk.go (local), breaker.go
-internal/server    khatru relay + Blossom handler, streaming upload, PoW/ad gate
+internal/server    khatru relay + Blossom handler, streaming upload, PoW/ad gate,
+                   ingest/mirror, moderation (bans + address takedowns), ad inventory
 internal/announce  Nostr capability announcement (federation discovery)
 docs/              deployment guide + BUD specs
 deploy/            Docker Compose + Caddy
