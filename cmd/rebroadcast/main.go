@@ -5,12 +5,11 @@
 // a re-run resumes instead of re-sending. Re-publishing signed events needs no
 // key (the signatures already exist), so this is safe to run anywhere.
 //
-// Usage:
+// Usage (defaults read from brs and target the ingest relay set):
 //
-//	go run ./cmd/rebroadcast \
-//	  -source wss://brs.degmods.com \
-//	  -targets wss://relay.damus.io,wss://relay.primal.net,wss://nos.lol,wss://relay.nostr.band \
-//	  -delay 600
+//	go run ./cmd/rebroadcast
+//	go run ./cmd/rebroadcast -delay 800            # slower if a relay rate-limits
+//	go run ./cmd/rebroadcast -targets wss://a,wss://b
 //
 // It's a one-off maintenance tool, not part of the server.
 package main
@@ -35,7 +34,7 @@ const (
 
 func main() {
 	source := flag.String("source", "wss://brs.degmods.com", "relay to read the legacy mods from")
-	targetsCSV := flag.String("targets", "wss://relay.damus.io,wss://relay.primal.net,wss://nos.lol,wss://relay.nostr.band", "comma-separated relays to rebroadcast to")
+	targetsCSV := flag.String("targets", "wss://relay.primal.net,wss://nos.lol,wss://relay.nostr.band,wss://relay.snort.social,wss://relay.nostr.info,wss://relay.wellorder.net", "comma-separated relays to rebroadcast to")
 	delayMs := flag.Int("delay", 600, "milliseconds between publishes to a single relay (pacing)")
 	checkpointPath := flag.String("checkpoint", "rebroadcast-checkpoint.json", "resumable progress file")
 	pageSize := flag.Int("page", 500, "fetch page size when reading from the source")

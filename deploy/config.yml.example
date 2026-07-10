@@ -45,11 +45,12 @@ ingest:
   # this node, so it becomes a complete mod DB clients can query in one place.
   enabled: true
   relays:
-    - "wss://relay.degmods.com"
-    - "wss://relay.damus.io"
     - "wss://relay.primal.net"
     - "wss://nos.lol"
     - "wss://relay.nostr.band"
+    - "wss://relay.snort.social"
+    - "wss://relay.nostr.info"
+    - "wss://relay.wellorder.net"
 
 ads:
   # Relays the node publishes its ad inventory to (the BUD-Ads gate target,
