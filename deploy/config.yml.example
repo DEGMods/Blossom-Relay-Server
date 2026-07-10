@@ -49,7 +49,6 @@ ingest:
     - "wss://nos.lol"
     - "wss://relay.nostr.band"
     - "wss://relay.snort.social"
-    - "wss://relay.nostr.info"
     - "wss://relay.wellorder.net"
 
 ads:
