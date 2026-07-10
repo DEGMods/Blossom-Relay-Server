@@ -2,7 +2,7 @@
 # Secrets are NOT here — they come from .env (R2_ACCESS_KEY / R2_SECRET_KEY).
 
 listen: ":3000"                          # Caddy forwards here (container-internal)
-public_url: "https://brs.degmods.com"    # your public hostname
+public_url: "https://brs.example.com"    # YOUR public hostname — must change (it's what the node announces)
 data_dir: "/app/data"                    # the mounted volume; do not change
 
 backend: "r2"
@@ -14,7 +14,7 @@ log:
 r2:
   endpoint: "<accountid>.r2.cloudflarestorage.com"   # R2 → Settings → S3 API
   region: "auto"
-  bucket: "deg-blossom-storage"
+  bucket: "your-blossom-bucket"
   use_ssl: true
 
 upload:
@@ -61,6 +61,7 @@ ads:
   # Relays the node publishes its ad inventory to (the BUD-Ads gate target,
   # 30078:<node-pubkey>:manual-blossom-ads). Clients must be able to read these.
   # Edit the ad list from the client's Settings → Admin → Ads tab; the node signs
-  # and publishes it with its own key. Defaults to announce.relays when omitted.
-  publish_relays:
-    - "wss://relay.degmods.com"
+  # and publishes it with its own key. Omitted here so it defaults to announce.relays;
+  # uncomment to publish the inventory to a different set.
+  # publish_relays:
+  #   - "wss://relay.example.com"
