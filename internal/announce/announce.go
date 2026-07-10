@@ -15,11 +15,12 @@ import (
 )
 
 // AnnounceKind is a NIP-78 parameterized-replaceable event; AnnounceDTag scopes
-// it so `kind:30078 #d:degmods-node` (or `#t:degmods-node`) discovers all nodes.
+// it so `kind:30078 #d:blossom-node-announcement` (or `#t:...`) discovers all
+// nodes. Deliberately unbranded so any operator's node uses the same coordinate.
 const (
 	AnnounceKind = 30078
-	AnnounceDTag = "degmods-node"
-	AnnounceTTag = "degmods-node"
+	AnnounceDTag = "blossom-node-announcement"
+	AnnounceTTag = "blossom-node-announcement"
 )
 
 // Node is the advertised capability set (serialized as the event content).

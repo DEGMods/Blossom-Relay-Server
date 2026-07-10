@@ -1,11 +1,13 @@
 package server
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -87,27 +89,59 @@ func (s *Server) verifyUploadAuth(evt *nostr.Event) (hash string, err error) {
 	return hash, nil
 }
 
-// ── zip validation ───────────────────────────────────────────────────────────
+// ── upload type validation ───────────────────────────────────────────────────
 
-// verifyZip confirms the spooled file is an unencrypted ZIP (magic bytes), so we
-// reject media and password-protected archives.
-func verifyZip(f *os.File) error {
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return err
+// uploadMagic maps a file's leading bytes to an extension + content-type. Order
+// matters (longer/more-specific prefixes first). Unmatched files are "bin".
+type uploadMagic struct {
+	prefix []byte
+	ext    string
+	ctype  string
+}
+
+var uploadMagics = []uploadMagic{
+	{[]byte("PK\x03\x04"), "zip", "application/zip"},
+	{[]byte("Rar!\x1a\x07"), "rar", "application/vnd.rar"},
+	{[]byte("7z\xbc\xaf\x27\x1c"), "7z", "application/x-7z-compressed"},
+	{[]byte("\x1f\x8b"), "gz", "application/gzip"},
+	{[]byte("MZ"), "exe", "application/vnd.microsoft.portable-executable"},
+}
+
+func (s *Server) uploadTypeAllowed(ext string) bool {
+	for _, t := range s.allowedUploadTypes {
+		if t == "*" || strings.EqualFold(t, ext) {
+			return true
+		}
 	}
-	var hdr [8]byte
-	if _, err := io.ReadFull(f, hdr[:]); err != nil {
-		return errors.New("not a valid zip file")
+	return false
+}
+
+// classifyUpload detects the spooled file's type from its magic bytes, enforces
+// the configured allow-list, and (for zips) still rejects encrypted archives.
+// Returns the extension + content-type to store it under.
+func (s *Server) classifyUpload(f *os.File) (ext, ctype string, err error) {
+	if _, e := f.Seek(0, io.SeekStart); e != nil {
+		return "", "", e
 	}
-	// Local file header must start with PK\x03\x04.
-	if !(hdr[0] == 'P' && hdr[1] == 'K' && hdr[2] == 0x03 && hdr[3] == 0x04) {
-		return errors.New("only .zip files are accepted")
+	var head [16]byte
+	n, _ := io.ReadFull(f, head[:])
+	b := head[:n]
+
+	ext, ctype = "bin", "application/octet-stream"
+	for _, m := range uploadMagics {
+		if bytes.HasPrefix(b, m.prefix) {
+			ext, ctype = m.ext, m.ctype
+			break
+		}
+	}
+	if !s.uploadTypeAllowed(ext) {
+		return "", "", fmt.Errorf("this server does not accept .%s files", ext)
 	}
 	// General-purpose bit flag at offset 6 (little-endian); bit 0 = encrypted.
-	if (uint16(hdr[6])|uint16(hdr[7])<<8)&0x0001 != 0 {
-		return errors.New("encrypted zip archives are not accepted")
+	if ext == "zip" && n >= 8 && (uint16(b[6])|uint16(b[7])<<8)&0x0001 != 0 {
+		return "", "", errors.New("encrypted zip archives are not accepted")
 	}
-	return nil
+	return ext, ctype, nil
 }
 
 // ── http helpers ─────────────────────────────────────────────────────────────
@@ -302,7 +336,8 @@ func (s *Server) handleUploadPut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadRequest, "sha256 does not match the authorization")
 		return
 	}
-	if err := verifyZip(tmp); err != nil {
+	ext, ctype, err := s.classifyUpload(tmp)
+	if err != nil {
 		httpErr(w, http.StatusUnsupportedMediaType, err.Error())
 		return
 	}
@@ -311,16 +346,16 @@ func (s *Server) handleUploadPut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusInternalServerError, "temp seek failed")
 		return
 	}
-	if err := s.storage.Store(ctx, sum, "zip", "application/zip", tmp, n); err != nil {
+	if err := s.storage.Store(ctx, sum, ext, ctype, tmp, n); err != nil {
 		httpErr(w, http.StatusBadGateway, "storage write failed")
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"url":      s.publicURL + "/" + sum + ".zip",
+		"url":      s.publicURL + "/" + sum + "." + ext,
 		"sha256":   sum,
 		"size":     n,
-		"type":     "application/zip",
+		"type":     ctype,
 		"uploaded": time.Now().Unix(),
 	})
 }

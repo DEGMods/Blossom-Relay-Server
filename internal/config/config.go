@@ -77,6 +77,9 @@ type Upload struct {
 	MinFreeDiskMB     int64  `yaml:"min_free_disk_mb"`     // refuse uploads below this free space (default 1024)
 	IdleTimeoutSec    int    `yaml:"idle_timeout_sec"`     // abort an upload after this many seconds with no data (default 60)
 	MinUploadRateKBps int    `yaml:"min_upload_rate_kbps"` // abort an upload averaging below this over a 5s window (default 50; negative = off)
+	// Accepted file extensions, detected by magic bytes (default ["zip"]). Use
+	// ["*"] to allow any type. Recognised: zip, rar, 7z, gz, tar, exe (others → bin).
+	AllowedTypes []string `yaml:"allowed_types"`
 }
 
 type R2 struct {
@@ -152,6 +155,9 @@ func Load(path string) (*Config, error) {
 	}
 	if c.Upload.MinUploadRateKBps == 0 {
 		c.Upload.MinUploadRateKBps = 50
+	}
+	if len(c.Upload.AllowedTypes) == 0 {
+		c.Upload.AllowedTypes = []string{"zip"}
 	}
 	if c.Download.ChallengeTTL == 0 {
 		c.Download.ChallengeTTL = 600

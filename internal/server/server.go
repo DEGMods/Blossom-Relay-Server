@@ -39,8 +39,9 @@ type Server struct {
 	maxUploadBytes    int64
 	minFreeDiskMB     int64
 	uploadIdleTimeout time.Duration
-	minUploadRateBps  int64 // 0 = off
-	minUploadPoW      int
+	minUploadRateBps   int64 // 0 = off
+	minUploadPoW       int
+	allowedUploadTypes []string // accepted extensions (magic-detected); "*" = any
 	minEventPoW       int
 	limiter           *uploadLimiter
 	block             *blocklist
@@ -110,8 +111,9 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		maxUploadBytes:    int64(cfg.Upload.MaxSizeMB) * 1024 * 1024,
 		minFreeDiskMB:     cfg.Upload.MinFreeDiskMB,
 		uploadIdleTimeout: time.Duration(cfg.Upload.IdleTimeoutSec) * time.Second,
-		minUploadRateBps:  int64(maxInt(cfg.Upload.MinUploadRateKBps, 0)) * 1024,
-		minUploadPoW:      cfg.Upload.MinPoW,
+		minUploadRateBps:   int64(maxInt(cfg.Upload.MinUploadRateKBps, 0)) * 1024,
+		minUploadPoW:       cfg.Upload.MinPoW,
+		allowedUploadTypes: cfg.Upload.AllowedTypes,
 		minEventPoW:       cfg.Relay.MinEventPoW,
 		limiter:           newUploadLimiter(cfg.Upload.MaxConcurrent),
 		block:             loadBlocklist(filepath.Join(cfg.DataDir, "blocklist.json")),
@@ -130,6 +132,9 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		nodeSeckey:      gateSecret, // the node's secret key (also seeds the gate HMAC)
 		adPublishRelays: cfg.Ads.PublishRelays,
 		adInv:           loadAdInventory(filepath.Join(cfg.DataDir, "ads_inventory.json")),
+	}
+	if len(s.allowedUploadTypes) == 0 {
+		s.allowedUploadTypes = []string{"zip"}
 	}
 	// The ad inventory lives at this coordinate regardless of whether the gate is
 	// currently enforced, so the admin can set ads up before turning the gate on.

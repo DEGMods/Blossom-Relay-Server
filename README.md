@@ -13,8 +13,9 @@ Licensed **MIT** — anyone can run a node.
 - **Blossom blob server** — BUD-01/02/04/05/06 GET/HEAD/upload/delete, blobs
   addressed by SHA-256.
 - **Streaming uploads** up to 500 MB — hashed on the fly (a lying `Content-Length`
-  can't overflow), `.zip`-only via magic bytes, kind-24242 auth, a global
-  concurrency cap plus one in-flight upload per npub, and a free-disk check.
+  can't overflow), a **configurable** magic-byte type filter (default `.zip`; set
+  `upload.allowed_types` to add types or `["*"]` for any), kind-24242 auth, a
+  global concurrency cap plus one in-flight upload per npub, and a free-disk check.
 - **Mod-scoped Nostr relay** — an embedded [badger](https://github.com/dgraph-io/badger)
   event store that accepts only mod events (current kind `31142` + legacy `30402`
   `GameMod` before a cutoff), enforces per-event proof-of-work (NIP-13), and honors
@@ -56,8 +57,9 @@ cp config.yml.example config.yml     # endpoint, public URL, admin npub
 docker compose up -d
 ```
 
-Full walkthrough — from a bare VPS to cutover — in the
-[deployment guide](docs/DEPLOYMENT.md).
+Full walkthrough — buy a server, set up storage (Cloudflare R2 **or** self-hosted
+S3), DNS, deploy, verify, and turn on gates — in the
+[deploy guide](DEPLOY-GUIDE.md).
 
 ## Configuration
 

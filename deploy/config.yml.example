@@ -21,6 +21,7 @@ upload:
   max_size_mb: 500
   max_concurrent: 4
   min_free_disk_mb: 1024
+  allowed_types: ["zip"]                  # accepted file types (magic-detected). ["*"] = any; e.g. ["zip", "rar", "7z"]
 
 relay:
   admin_npub: "npub1youradminkey"        # your npub — allowed to ban/allow via NIP-86
