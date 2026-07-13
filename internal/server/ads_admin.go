@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,13 +23,21 @@ const (
 	adInventoryDTag = "manual-blossom-ads"
 )
 
+// adButton is one labelled call-to-action shown under the ad image. Any click
+// on it counts toward this ad's clicks (keyed by the ad id) in metrics.
+type adButton struct {
+	Text string `json:"text"`
+	Link string `json:"link"`
+}
+
 // adItem is one ad in the inventory (mirrors the client's Ad shape in gate.ts).
 type adItem struct {
-	ID     string `json:"id"`
-	Media  string `json:"media"`          // blossom hash or URL of the creative
-	Link   string `json:"link,omitempty"` // click-through URL
-	Alt    string `json:"alt,omitempty"`  // alt text
-	Weight int    `json:"weight,omitempty"`
+	ID      string     `json:"id"`
+	Media   string     `json:"media"`          // blossom hash or URL of the creative
+	Link    string     `json:"link,omitempty"` // legacy single click-through URL (fallback CTA)
+	Alt     string     `json:"alt,omitempty"`  // alt text
+	Weight  int        `json:"weight,omitempty"`
+	Buttons []adButton `json:"buttons,omitempty"` // up to 3 CTA buttons
 }
 
 // adInventoryContent is the JSON serialized into the NIP-78 event content.
@@ -82,7 +91,26 @@ func normalizeAds(in []adItem) []adItem {
 		if a.Weight < 1 {
 			a.Weight = 1
 		}
+		a.Buttons = normalizeButtons(a.Buttons)
 		out = append(out, a)
+	}
+	return out
+}
+
+// normalizeButtons drops buttons missing a label or link, trims them, and keeps
+// at most the first 3.
+func normalizeButtons(in []adButton) []adButton {
+	out := make([]adButton, 0, len(in))
+	for _, b := range in {
+		text := strings.TrimSpace(b.Text)
+		link := strings.TrimSpace(b.Link)
+		if text == "" || link == "" {
+			continue
+		}
+		out = append(out, adButton{Text: text, Link: link})
+		if len(out) == 3 {
+			break
+		}
 	}
 	return out
 }

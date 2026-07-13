@@ -56,6 +56,29 @@ func TestAds_NormalizeAndBuild(t *testing.T) {
 	}
 }
 
+func TestAds_ButtonsNormalize(t *testing.T) {
+	ads := normalizeAds([]adItem{
+		{ID: "a", Media: "hash1", Buttons: []adButton{
+			{Text: " Website ", Link: " https://example.com "}, // kept + trimmed
+			{Text: "", Link: "https://x.com"},                  // dropped: no label
+			{Text: "NoLink", Link: ""},                         // dropped: no link
+			{Text: "B2", Link: "https://2.com"},                // kept
+			{Text: "B3", Link: "https://3.com"},                // kept (3rd)
+			{Text: "B4", Link: "https://4.com"},                // dropped: over cap of 3
+		}},
+	})
+	if len(ads) != 1 {
+		t.Fatalf("want 1 ad, got %d", len(ads))
+	}
+	btns := ads[0].Buttons
+	if len(btns) != 3 {
+		t.Fatalf("want 3 buttons after validation + cap, got %d", len(btns))
+	}
+	if btns[0].Text != "Website" || btns[0].Link != "https://example.com" {
+		t.Fatalf("first button should be trimmed: %+v", btns[0])
+	}
+}
+
 func TestAds_AdminPutThenGet(t *testing.T) {
 	nodeSK := nostr.GeneratePrivateKey()
 	nodePK, _ := nostr.GetPublicKey(nodeSK)
