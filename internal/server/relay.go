@@ -14,6 +14,9 @@ import (
 const (
 	currentModKind = 31142 // the permanent, current mod kind
 	legacyModKind  = 30402 // LEGACY: old mods (temporary exception, see below)
+	jamKind        = 31143 // mod jam
+	jamBallotKind  = 31243 // mod jam ballot (a vote)
+	jamResultKind  = 31343 // mod jam results (paged leaderboard)
 )
 
 // LEGACY: legacy mods (kind 30402) are accepted only with a "GameMod" t-tag and a
@@ -36,13 +39,19 @@ func isLegacyMod(evt *nostr.Event) bool {
 		hasTagValue(evt, "t", "GameMod")
 }
 
-func acceptedKind(k int) bool { return k == currentModKind || k == legacyModKind }
+func isJamKind(k int) bool { return k == jamKind || k == jamBallotKind || k == jamResultKind }
+
+func acceptedKind(k int) bool {
+	return k == currentModKind || k == legacyModKind || isJamKind(k)
+}
 
 // AcceptedModKinds are the relay event kinds this node stores/serves (for the
-// discovery announcement).
-func AcceptedModKinds() []int { return []int{currentModKind, legacyModKind} }
+// discovery announcement): mods (current + legacy) and the mod-jam family.
+func AcceptedModKinds() []int {
+	return []int{currentModKind, legacyModKind, jamKind, jamBallotKind, jamResultKind}
+}
 
-// rejectEvent enforces the mod-only write policy.
+// rejectEvent enforces the write policy: mods (+ legacy) and the mod-jam family.
 func (s *Server) rejectEvent(ctx context.Context, evt *nostr.Event) (bool, string) {
 	if s.blocked(evt.PubKey) {
 		return true, "blocked: pubkey is banned"
@@ -70,17 +79,26 @@ func (s *Server) rejectEvent(ctx context.Context, evt *nostr.Event) (bool, strin
 			return true, "pow: insufficient proof-of-work"
 		}
 		return false, ""
+	case jamKind, jamBallotKind, jamResultKind:
+		// Mod-jam family: all addressable, so a d tag is required; PoW-gated like mods.
+		if tagValue(evt, "d") == "" {
+			return true, "invalid: jam event is missing its d tag"
+		}
+		if s.minEventPoW > 0 && nip13.Difficulty(evt.ID) < s.minEventPoW {
+			return true, "pow: insufficient proof-of-work"
+		}
+		return false, ""
 	case legacyModKind:
 		if !isLegacyMod(evt) { // LEGACY: PoW-exempt, but gated by tag + cutoff
 			return true, "legacy mods require a GameMod tag and must predate the cutoff"
 		}
 		return false, ""
 	default:
-		return true, "blocked: this relay only accepts mod events"
+		return true, "blocked: this relay only accepts mod and mod-jam events"
 	}
 }
 
-// rejectFilter keeps the relay mod-scoped for reads.
+// rejectFilter keeps the relay scoped (mods + mod-jam family) for reads.
 func (s *Server) rejectFilter(ctx context.Context, filter nostr.Filter) (bool, string) {
 	if len(filter.Kinds) == 0 {
 		return false, "" // querying everything → only mod events exist here
@@ -92,7 +110,7 @@ func (s *Server) rejectFilter(ctx context.Context, filter nostr.Filter) (bool, s
 			return false, ""
 		}
 	}
-	return true, "this relay only serves mod events"
+	return true, "this relay only serves mod and mod-jam events"
 }
 
 // setupRelay wires the event store, mod policies, and NIP-86 admin onto the relay.

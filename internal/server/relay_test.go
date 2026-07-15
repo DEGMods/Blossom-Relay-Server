@@ -26,6 +26,10 @@ func TestRejectEvent(t *testing.T) {
 		{"legacy GameMod before cutoff", mkEvent(legacyModKind, legacyCutoff-1000, nostr.Tags{{"t", "GameMod"}}), false},
 		{"legacy without GameMod", mkEvent(legacyModKind, legacyCutoff-1000, nostr.Tags{{"t", "other"}}), true},
 		{"legacy after cutoff", mkEvent(legacyModKind, legacyCutoff+1000, nostr.Tags{{"t", "GameMod"}}), true},
+		{"jam with d", mkEvent(jamKind, now, nostr.Tags{{"d", "abc"}}), false},
+		{"jam missing d", mkEvent(jamKind, now, nostr.Tags{{"title", "x"}}), true},
+		{"ballot with d", mkEvent(jamBallotKind, now, nostr.Tags{{"d", "jam:sub"}}), false},
+		{"result with d", mkEvent(jamResultKind, now, nostr.Tags{{"d", "jam:r:0"}}), false},
 		{"other kind", mkEvent(1, now, nil), true},
 	}
 	for _, c := range cases {
@@ -49,6 +53,11 @@ func TestRejectFilter(t *testing.T) {
 
 	if rej, _ := srv.rejectFilter(ctx, nostr.Filter{Kinds: []int{currentModKind}}); rej {
 		t.Error("mod-kind filter should be allowed")
+	}
+	for _, k := range []int{jamKind, jamBallotKind, jamResultKind} {
+		if rej, _ := srv.rejectFilter(ctx, nostr.Filter{Kinds: []int{k}}); rej {
+			t.Errorf("jam-kind %d filter should be allowed", k)
+		}
 	}
 	if rej, _ := srv.rejectFilter(ctx, nostr.Filter{Kinds: []int{1}}); !rej {
 		t.Error("non-mod-kind filter should be rejected")
