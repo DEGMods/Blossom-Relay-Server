@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	currentModKind = 31142 // the permanent, current mod kind
-	legacyModKind  = 30402 // LEGACY: old mods (temporary exception, see below)
-	jamKind        = 31143 // mod jam
-	jamBallotKind  = 31243 // mod jam ballot (a vote)
-	jamResultKind  = 31343 // mod jam results (paged leaderboard)
+	currentModKind    = 31142 // the permanent, current mod kind
+	legacyModKind     = 30402 // LEGACY: old mods (temporary exception, see below)
+	jamKind           = 31143 // mod jam
+	jamBallotKind     = 31243 // mod jam ballot (a vote)
+	jamResultKind     = 31343 // mod jam results (paged leaderboard)
+	moderationTagKind = 30985 // admin tag overlay applied to someone else's post
 )
 
 // LEGACY: legacy mods (kind 30402) are accepted only with a "GameMod" t-tag and a
@@ -42,16 +43,18 @@ func isLegacyMod(evt *nostr.Event) bool {
 func isJamKind(k int) bool { return k == jamKind || k == jamBallotKind || k == jamResultKind }
 
 func acceptedKind(k int) bool {
-	return k == currentModKind || k == legacyModKind || isJamKind(k)
+	return k == currentModKind || k == legacyModKind || isJamKind(k) || k == moderationTagKind
 }
 
 // AcceptedModKinds are the relay event kinds this node stores/serves (for the
-// discovery announcement): mods (current + legacy) and the mod-jam family.
+// discovery announcement): mods (current + legacy), the mod-jam family, and the
+// admin's moderation tag overlays.
 func AcceptedModKinds() []int {
-	return []int{currentModKind, legacyModKind, jamKind, jamBallotKind, jamResultKind}
+	return []int{currentModKind, legacyModKind, jamKind, jamBallotKind, jamResultKind, moderationTagKind}
 }
 
-// rejectEvent enforces the write policy: mods (+ legacy) and the mod-jam family.
+// rejectEvent enforces the write policy: mods (+ legacy), the mod-jam family,
+// and admin-only moderation tags.
 func (s *Server) rejectEvent(ctx context.Context, evt *nostr.Event) (bool, string) {
 	if s.blocked(evt.PubKey) {
 		return true, "blocked: pubkey is banned"
@@ -88,17 +91,33 @@ func (s *Server) rejectEvent(ctx context.Context, evt *nostr.Event) (bool, strin
 			return true, "pow: insufficient proof-of-work"
 		}
 		return false, ""
+	case moderationTagKind:
+		// Tag overlays applied to other people's posts, so only the admin may
+		// write them — otherwise anyone could mark anyone's mod NSFW here.
+		if s.adminPubkey == "" {
+			return true, "blocked: moderation tags require a configured relay admin"
+		}
+		if evt.PubKey != s.adminPubkey {
+			return true, "restricted: only the relay admin may publish moderation tags"
+		}
+		if tagValue(evt, "d") == "" {
+			return true, "invalid: moderation tag is missing its d tag"
+		}
+		// No PoW: it's already restricted to a single pubkey, so the spam floor
+		// PoW exists to raise buys nothing, and a moderator shouldn't have to mine
+		// to hide something.
+		return false, ""
 	case legacyModKind:
 		if !isLegacyMod(evt) { // LEGACY: PoW-exempt, but gated by tag + cutoff
 			return true, "legacy mods require a GameMod tag and must predate the cutoff"
 		}
 		return false, ""
 	default:
-		return true, "blocked: this relay only accepts mod and mod-jam events"
+		return true, "blocked: this relay only accepts mod, mod-jam, and moderation-tag events"
 	}
 }
 
-// rejectFilter keeps the relay scoped (mods + mod-jam family) for reads.
+// rejectFilter keeps the relay scoped (mods, mod-jam family, moderation tags) for reads.
 func (s *Server) rejectFilter(ctx context.Context, filter nostr.Filter) (bool, string) {
 	if len(filter.Kinds) == 0 {
 		return false, "" // querying everything → only mod events exist here
@@ -110,7 +129,7 @@ func (s *Server) rejectFilter(ctx context.Context, filter nostr.Filter) (bool, s
 			return false, ""
 		}
 	}
-	return true, "this relay only serves mod and mod-jam events"
+	return true, "this relay only serves mod, mod-jam, and moderation-tag events"
 }
 
 // setupRelay wires the event store, mod policies, and NIP-86 admin onto the relay.

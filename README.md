@@ -18,8 +18,11 @@ Licensed **MIT** — anyone can run a node.
   global concurrency cap plus one in-flight upload per npub, and a free-disk check.
 - **Mod-scoped Nostr relay** — an embedded [badger](https://github.com/dgraph-io/badger)
   event store that accepts only mod events (current kind `31142` + legacy `30402`
-  `GameMod` before a cutoff), enforces per-event proof-of-work (NIP-13), and honors
-  author deletions (NIP-09) **persistently** so a removed mod stays gone.
+  `GameMod` before a cutoff), the mod-jam family (`31143`/`31243`/`31343`), and
+  admin moderation tags (`30985`), enforces per-event proof-of-work (NIP-13), and
+  honors author deletions (NIP-09) **persistently** so a removed mod stays gone.
+  Moderation tags apply tags to *other people's* posts, so they are writable only
+  by `relay.admin_npub` and are PoW-exempt; anyone may read them.
 - **Ingest / mirror** — optionally subscribes to other relays and stores every mod
   they carry (current + legacy), so the node becomes a complete, one-stop mod DB.
 - **Moderation** — NIP-86 pubkey ban/allow, plus persistent **address-based
