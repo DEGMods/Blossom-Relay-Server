@@ -75,7 +75,7 @@ All options are documented in [`deploy/config.yml.example`](deploy/config.yml.ex
 | `backend` | `r2`, `s3`, or `disk` |
 | `r2` / `s3` / `disk` | the selected backend's settings |
 | `upload` | size cap, concurrency, min free disk, optional NIP-13 PoW |
-| `relay` | admin npub (NIP-86), min event PoW |
+| `relay` | admin npub (NIP-86 + moderation tags), min event PoW, kind allowlist |
 | `download` | PoW difficulty, ad gate, trusted client-IP header |
 | `ingest` | mirror mods (current + legacy) from other relays into this node |
 | `ads` | relays the node publishes its BUD-Ads inventory to |
@@ -85,6 +85,63 @@ All options are documented in [`deploy/config.yml.example`](deploy/config.yml.ex
 On first run the node generates its identity and prints its `npub`; the `nsec` is
 saved to `data/identity.key` (used to sign the node's ad inventory and its
 federation announcement).
+
+## Forking this node
+
+Everything below works untouched, which is exactly why it gets missed. Two
+settings decide who controls your relay and what it's for.
+
+### The admin key — read this one
+
+```yaml
+relay:
+  admin_npub: "npub1youradminkey"
+```
+
+This npub holds **two** powers on your node:
+
+1. The NIP-86 management API — banning and unbanning pubkeys.
+2. The only key allowed to publish **moderation tags** (kind `30985`), which
+   apply tags like `content-warning` to *other people's* posts. Clients that
+   trust your relay render those tags as if the author had set them.
+
+Leave DEG Mods' npub here and DEG Mods can moderate your relay. Nothing breaks
+and nothing warns you. **Put your own npub in.**
+
+Leaving it empty is safe but disables both: no management API, and moderation
+tags are refused from everyone including you.
+
+> Client-side counterpart: the DEG Mods **client** has its own `ADMIN_PUBKEY` in
+> `src/lib/constants.ts`, and it decides whose moderation tags to *honour*. The
+> relay decides whose it will *store*. If those two keys differ, your client will
+> ignore tags your relay accepted (or want tags it refuses to store). Keep them
+> the same key unless you have a reason not to.
+
+### Accepting any kind
+
+By default this is a **mod-scoped** relay: it stores and serves mod events
+(`31142`, legacy `30402`), the mod-jam family (`31143`/`31243`/`31343`), and
+moderation tags (`30985`). Everything else is rejected on write *and* on read.
+
+For a general-purpose relay:
+
+```yaml
+relay:
+  accept_all_kinds: true
+  min_event_pow: 20        # strongly recommended when you do this
+```
+
+That drops the allowlist entirely — any kind, from anyone, including kind `30985`
+from anyone. What still applies: banned pubkeys, event takedowns, and honored
+NIP-09 deletions. What stops applying is the thing that was doing most of the
+work: a relay that only accepts mod events simply isn't a useful target for
+general spam. **Set `min_event_pow` when you open it up** — with the scope gone,
+proof-of-work is the only floor left. Deletions stay PoW-exempt, so a takedown
+never needs mining.
+
+The federation announcement still advertises the mod kinds, so an open fork will
+be discovered as a mod node until you adjust `AcceptedModKinds()` in
+[`internal/server/relay.go`](internal/server/relay.go).
 
 ## Download gates
 

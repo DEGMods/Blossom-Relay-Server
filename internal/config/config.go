@@ -67,6 +67,11 @@ type Download struct {
 type Relay struct {
 	AdminNpub   string `yaml:"admin_npub"`    // npub allowed to use the NIP-86 management API
 	MinEventPoW int    `yaml:"min_event_pow"` // NIP-13 bits required on mod events (legacy 30402 exempt)
+	// AcceptAllKinds drops the mod-scoped kind allowlist: any kind, from anyone.
+	// For a fork that wants a general-purpose relay rather than a mod one. The
+	// remaining protections (banned pubkeys, event takedowns, honored deletions,
+	// and min_event_pow) still apply.
+	AcceptAllKinds bool `yaml:"accept_all_kinds"`
 }
 
 type Upload struct {

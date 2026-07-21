@@ -68,6 +68,16 @@ func (s *Server) rejectEvent(ctx context.Context, evt *nostr.Event) (bool, strin
 	if dt := s.deletions.deletedAt(moderationKey(evt)); dt > 0 && int64(evt.CreatedAt) <= dt {
 		return true, "blocked: this event was deleted by its author"
 	}
+	// Fork switch: no kind allowlist at all. Everything above still applies
+	// (bans, takedowns, honored deletions) and PoW becomes the only spam floor,
+	// so a general-purpose fork should set min_event_pow rather than rely on the
+	// scope. Deletions stay exempt — a takedown must never need mining.
+	if s.acceptAllKinds {
+		if s.minEventPoW > 0 && evt.Kind != 5 && nip13.Difficulty(evt.ID) < s.minEventPoW {
+			return true, "pow: insufficient proof-of-work"
+		}
+		return false, ""
+	}
 	switch evt.Kind {
 	case 5:
 		// NIP-09 deletion request. khatru applies its effect before this policy
@@ -119,6 +129,9 @@ func (s *Server) rejectEvent(ctx context.Context, evt *nostr.Event) (bool, strin
 
 // rejectFilter keeps the relay scoped (mods, mod-jam family, moderation tags) for reads.
 func (s *Server) rejectFilter(ctx context.Context, filter nostr.Filter) (bool, string) {
+	if s.acceptAllKinds {
+		return false, "" // fork switch: serve whatever was stored
+	}
 	if len(filter.Kinds) == 0 {
 		return false, "" // querying everything → only mod events exist here
 	}

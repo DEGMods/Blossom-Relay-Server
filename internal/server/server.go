@@ -43,6 +43,7 @@ type Server struct {
 	minUploadPoW       int
 	allowedUploadTypes []string // accepted extensions (magic-detected); "*" = any
 	minEventPoW        int
+	acceptAllKinds     bool // fork switch: no kind allowlist (see config.Relay)
 	limiter            *uploadLimiter
 	block              *blocklist
 	white              *whitelist
@@ -115,6 +116,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		minUploadPoW:       cfg.Upload.MinPoW,
 		allowedUploadTypes: cfg.Upload.AllowedTypes,
 		minEventPoW:        cfg.Relay.MinEventPoW,
+		acceptAllKinds:     cfg.Relay.AcceptAllKinds,
 		limiter:            newUploadLimiter(cfg.Upload.MaxConcurrent),
 		block:              loadBlocklist(filepath.Join(cfg.DataDir, "blocklist.json")),
 		white:              loadWhitelist(filepath.Join(cfg.DataDir, "whitelist.json")),

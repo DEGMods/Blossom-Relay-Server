@@ -24,8 +24,17 @@ upload:
   allowed_types: ["zip"]                  # accepted file types (magic-detected). ["*"] = any; e.g. ["zip", "rar", "7z"]
 
 relay:
-  admin_npub: "npub1youradminkey"        # your npub — allowed to ban/allow via NIP-86
+  # YOUR npub, not DEG Mods'. Two powers: the NIP-86 management API
+  # (ban/allow), and the only key allowed to publish moderation tags
+  # (kind 30985) — tags applied to other people's posts. Leave it empty
+  # and moderation tags are refused from everyone.
+  admin_npub: "npub1youradminkey"
   min_event_pow: 0
+  # Drop the mod-scoped kind allowlist: accept any kind, from anyone. For a
+  # fork that wants a general-purpose relay. Bans, takedowns and honored
+  # deletions still apply, but the kind scope stops limiting abuse — set
+  # min_event_pow above if you turn this on.
+  accept_all_kinds: false
 
 download:
   # START WITH GATES OFF. Verify read parity + upload first, then turn these on.
