@@ -158,11 +158,12 @@ func (s *Server) handleAdminBlobs(w http.ResponseWriter, r *http.Request) {
 	end := minInt(start+per, total)
 
 	type blobDTO struct {
-		Hash  string `json:"hash"`
-		Ext   string `json:"ext"`
-		Size  int64  `json:"size"`
-		URL   string `json:"url"`
-		Added int64  `json:"added"` // unix seconds; 0 if unknown
+		Hash   string `json:"hash"`
+		Ext    string `json:"ext"`
+		Size   int64  `json:"size"`
+		URL    string `json:"url"`
+		Added  int64  `json:"added"`            // unix seconds; 0 if unknown
+		Pubkey string `json:"pubkey,omitempty"` // uploader; empty if uploaded before this was tracked
 	}
 	items := make([]blobDTO, 0, end-start)
 	for _, b := range filtered[start:end] {
@@ -170,11 +171,51 @@ func (s *Server) handleAdminBlobs(w http.ResponseWriter, r *http.Request) {
 		if !b.Modified.IsZero() {
 			added = b.Modified.Unix()
 		}
-		items = append(items, blobDTO{Hash: b.Hash, Ext: b.Ext, Size: b.Size, URL: s.publicURL + "/" + b.Key, Added: added})
+		items = append(items, blobDTO{
+			Hash: b.Hash, Ext: b.Ext, Size: b.Size,
+			URL: s.publicURL + "/" + b.Key, Added: added, Pubkey: s.owners.get(b.Hash),
+		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"total": total, "page": page, "per": per, "pages": pages, "types": types, "blobs": items,
 	})
+}
+
+// handleAdminBlobDownload streams a blob straight to the admin, bypassing the
+// BUD-POW / ad download gate (which only wraps the public "/" route). Being
+// admin-authed and gate-free is what makes it the dashboard's no-friction
+// download — a plain public link would hit the gate.
+func (s *Server) handleAdminBlobDownload(w http.ResponseWriter, r *http.Request) {
+	setAdminCORS(w)
+	if err := s.verifyAdmin(r); err != nil {
+		httpErr(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	name := r.PathValue("hash") // "<hash>" or "<hash>.<ext>"
+	hash, ext := name, ""
+	if dot := strings.IndexByte(name, '.'); dot >= 0 {
+		hash, ext = name[:dot], name[dot+1:]
+	}
+	if !isSHA256Hex(hash) {
+		httpErr(w, http.StatusBadRequest, "bad hash")
+		return
+	}
+	rc, err := s.storage.Load(r.Context(), hash, ext)
+	if err != nil {
+		httpErr(w, http.StatusNotFound, "not found")
+		return
+	}
+	defer rc.Close()
+
+	filename := hash
+	if ext != "" {
+		filename += "." + ext
+	}
+	// octet-stream + attachment forces a download rather than an inline preview.
+	// ServeContent handles Range requests via the ReadSeeker (resumable).
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Disposition", `attachment; filename="`+filename+`"`)
+	http.ServeContent(w, r, filename, time.Time{}, rc)
 }
 
 // handleAdminWhitelistList returns the upload-size whitelist + the two size caps.

@@ -3,7 +3,8 @@ import {
   Loader2, Search, Trash2, Download, Copy, Check, ChevronLeft, ChevronRight,
   ArrowUp, ArrowDown, AlertTriangle,
 } from 'lucide-react'
-import { listBlobs, deleteBlob, formatBytes, type BlobsPage, type BlobSort } from '../api'
+import { listBlobs, deleteBlob, downloadBlob, formatBytes, type BlobsPage, type BlobSort } from '../api'
+import { npubEncode } from '../nostr'
 import { cn, truncateMiddle, formatDate } from '../lib'
 import { toast } from '../toast'
 
@@ -121,8 +122,15 @@ export function BlobsTab() {
                       <HashCell hash={b.hash} />
                     </td>
                     <td className="px-3 py-2 text-neutral-400">{b.ext ? `.${b.ext}` : '—'}</td>
-                    {/* Placeholder — the node doesn't persist the uploader pubkey per blob yet. */}
-                    <td className="px-3 py-2 text-neutral-600" title="Not tracked yet">—</td>
+                    <td className="px-3 py-2 font-mono text-xs">
+                      {b.pubkey ? (
+                        <span className="text-neutral-300" title={npubEncode(b.pubkey)}>
+                          {truncateMiddle(npubEncode(b.pubkey), 10, 6)}
+                        </span>
+                      ) : (
+                        <span className="text-neutral-600" title="Uploaded before uploaders were tracked">—</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 text-right tabular-nums text-neutral-300">{formatBytes(b.size)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-neutral-400">{formatDate(b.added)}</td>
                     {/* Placeholder — reference tracking / expiry (the "Fix C" work) isn't built. */}
@@ -134,16 +142,7 @@ export function BlobsTab() {
                     <td className="px-3 py-2 text-neutral-600" title="Not tracked yet">—</td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-1">
-                        <a
-                          href={b.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          download
-                          title="Download"
-                          className="rounded-md p-1.5 text-neutral-500 transition-colors hover:bg-secondary hover:text-white"
-                        >
-                          <Download className="h-4 w-4" />
-                        </a>
+                        <DownloadButton hash={b.hash} ext={b.ext} />
                         <button
                           onClick={() => setConfirm(b.hash)}
                           title="Delete"
@@ -201,6 +200,30 @@ export function BlobsTab() {
         />
       )}
     </div>
+  )
+}
+
+function DownloadButton({ hash, ext }: { hash: string; ext: string }) {
+  const [busy, setBusy] = useState(false)
+  const go = async () => {
+    setBusy(true)
+    try {
+      await downloadBlob(hash, ext)
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Download failed', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <button
+      onClick={go}
+      disabled={busy}
+      title="Download"
+      className="rounded-md p-1.5 text-neutral-500 transition-colors hover:bg-secondary hover:text-white disabled:opacity-60"
+    >
+      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+    </button>
   )
 }
 

@@ -15,6 +15,8 @@ export interface AdminBlob {
   size: number
   url: string
   added: number
+  /** Uploader pubkey (hex). Empty for blobs uploaded before this was tracked. */
+  pubkey?: string
 }
 export interface BlobsPage {
   total: number
@@ -73,6 +75,26 @@ export async function listBlobs(opts: {
   const res = await adminFetch(`/admin/blobs?${q.toString()}`, 'GET')
   if (!res.ok) throw new Error(await reason(res))
   return res.json()
+}
+
+/**
+ * Download a blob through the admin route, which bypasses the public
+ * download gate (PoW/ads). Fetched with the NIP-98 header, then handed to the
+ * browser as a save — a plain <a download> can't carry the auth header.
+ */
+export async function downloadBlob(hash: string, ext: string): Promise<void> {
+  const name = ext ? `${hash}.${ext}` : hash
+  const url = new URL(`/admin/blob/${name}`, window.location.origin).toString()
+  const res = await fetch(url, { headers: { Authorization: await nip98Header(url, 'GET') } })
+  if (!res.ok) throw new Error(await reason(res))
+  const objUrl = URL.createObjectURL(await res.blob())
+  const a = document.createElement('a')
+  a.href = objUrl
+  a.download = name
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(objUrl)
 }
 
 /** Delete a blob by hash (admin-authed DELETE /<hash>). */

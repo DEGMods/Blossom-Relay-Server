@@ -50,8 +50,9 @@ type Server struct {
 	block              *blocklist
 	white              *whitelist
 	bannedEv           *bannedEvents
-	deletions          *deletions // author-initiated NIP-09 takedowns (persistent)
-	adminPubkey        string     // hex; the only key allowed to delete blobs (moderation)
+	deletions          *deletions  // author-initiated NIP-09 takedowns (persistent)
+	owners             *blobOwners // hash -> uploader pubkey (persistent)
+	adminPubkey        string      // hex; the only key allowed to delete blobs (moderation)
 
 	// admin blob-listing cache (avoids a full storage scan on every page click)
 	blobCacheMu sync.Mutex
@@ -124,6 +125,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		white:              loadWhitelist(filepath.Join(cfg.DataDir, "whitelist.json")),
 		bannedEv:           loadBannedEvents(filepath.Join(cfg.DataDir, "banned_events.json")),
 		deletions:          loadDeletions(filepath.Join(cfg.DataDir, "deletions.json")),
+		owners:             loadBlobOwners(filepath.Join(cfg.DataDir, "blob_owners.json")),
 		adminPubkey:        resolvePubkey(cfg.Relay.AdminNpub),
 
 		powDifficulty:   cfg.Download.PoWDifficulty,
@@ -179,6 +181,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 	// Admin API (NIP-98 auth, admin key). Blob deletion via DELETE /<hash>.
 	mux.HandleFunc("DELETE /{hash}", s.handleDelete)
 	mux.HandleFunc("GET /admin/blobs", s.handleAdminBlobs)
+	mux.HandleFunc("GET /admin/blob/{hash}", s.handleAdminBlobDownload) // gate-free admin download
 	mux.HandleFunc("GET /admin/whitelist", s.handleAdminWhitelistList)
 	mux.HandleFunc("POST /admin/whitelist", s.handleAdminWhitelistAdd)
 	mux.HandleFunc("DELETE /admin/whitelist", s.handleAdminWhitelistRemove)

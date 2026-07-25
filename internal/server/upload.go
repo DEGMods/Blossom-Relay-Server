@@ -350,6 +350,9 @@ func (s *Server) handleUploadPut(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusBadGateway, "storage write failed")
 		return
 	}
+	// Remember who uploaded this, for the admin dashboard and later blob↔mod
+	// reconciliation. Best-effort: a failure here doesn't fail the upload.
+	s.owners.set(sum, evt.PubKey)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"url":      s.publicURL + "/" + sum + "." + ext,
