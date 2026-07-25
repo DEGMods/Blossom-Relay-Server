@@ -1,6 +1,7 @@
 package server
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -29,6 +30,21 @@ func TestUploadCapsDefaultsAndOverride(t *testing.T) {
 	}
 	if reloaded := loadUploadCaps(path, 500, 2500); reloaded.normalBytes() != 1000*mb || reloaded.whitelistBytes() != 8000*mb {
 		t.Fatalf("override not persisted: normal=%d whitelist=%d", reloaded.normalBytes(), reloaded.whitelistBytes())
+	}
+
+	// Reset restores the config defaults and removes the persisted override.
+	if err := c.reset(); err != nil {
+		t.Fatalf("reset: %v", err)
+	}
+	if n, w := c.snapshotMB(); n != 500 || w != 2500 {
+		t.Fatalf("after reset: normal=%d whitelist=%d, want 500/2500", n, w)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("reset should have removed the override file, stat err=%v", err)
+	}
+	// A reload with no file falls back to config defaults.
+	if reloaded := loadUploadCaps(path, 500, 2500); reloaded.normalBytes() != 500*mb {
+		t.Fatalf("after reset+reload normal=%d, want 500 MB", reloaded.normalBytes())
 	}
 }
 

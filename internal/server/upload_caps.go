@@ -21,11 +21,13 @@ const (
 // restart. The upload path reads these fresh on every request, so a change takes
 // effect on the next upload and never disturbs one already in flight.
 type uploadCaps struct {
-	mu          sync.RWMutex
-	saveMu      sync.Mutex
-	path        string
-	normalMB    int64
-	whitelistMB int64
+	mu             sync.RWMutex
+	saveMu         sync.Mutex
+	path           string
+	normalMB       int64
+	whitelistMB    int64
+	defNormalMB    int64 // config defaults, kept so "reset" can restore them
+	defWhitelistMB int64
 }
 
 type uploadCapsFile struct {
@@ -37,9 +39,15 @@ type uploadCapsFile struct {
 // on top. A missing or corrupt file just leaves the defaults in place — uploads
 // never end up without a cap.
 func loadUploadCaps(path string, defNormalMB, defWhitelistMB int64) *uploadCaps {
-	c := &uploadCaps{path: path, normalMB: defNormalMB, whitelistMB: defWhitelistMB}
-	if c.whitelistMB < c.normalMB {
-		c.whitelistMB = c.normalMB
+	if defWhitelistMB < defNormalMB {
+		defWhitelistMB = defNormalMB
+	}
+	c := &uploadCaps{
+		path:           path,
+		normalMB:       defNormalMB,
+		whitelistMB:    defWhitelistMB,
+		defNormalMB:    defNormalMB,
+		defWhitelistMB: defWhitelistMB,
 	}
 	if data, err := os.ReadFile(path); err == nil {
 		var f uploadCapsFile
@@ -72,6 +80,26 @@ func (c *uploadCaps) snapshotMB() (normalMB, whitelistMB int64) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.normalMB, c.whitelistMB
+}
+
+// defaultsMB returns the config defaults in MB (the values "reset" restores to).
+func (c *uploadCaps) defaultsMB() (normalMB, whitelistMB int64) {
+	return c.defNormalMB, c.defWhitelistMB // set once at construction, never mutated
+}
+
+// reset restores the config defaults and removes the persisted override, so the
+// node is back to its configured caps and a future restart re-seeds from config.
+func (c *uploadCaps) reset() error {
+	c.mu.Lock()
+	c.normalMB = c.defNormalMB
+	c.whitelistMB = c.defWhitelistMB
+	c.mu.Unlock()
+	c.saveMu.Lock()
+	defer c.saveMu.Unlock()
+	if err := os.Remove(c.path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // set validates and applies new caps (MB), persisting them. The whitelisted cap

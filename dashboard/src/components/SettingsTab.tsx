@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Loader2, HardDrive, ShieldCheck, CreditCard, Info, Save } from 'lucide-react'
-import { getWhitelist, setUploadCaps } from '../api'
+import { Loader2, HardDrive, ShieldCheck, CreditCard, Info, Save, RotateCcw } from 'lucide-react'
+import { getWhitelist, setUploadCaps, resetUploadCaps } from '../api'
 import { toast } from '../toast'
 
 /**
@@ -13,7 +13,9 @@ export function SettingsTab() {
   const [loading, setLoading] = useState(true)
   const [limitMb, setLimitMb] = useState('')
   const [whitelistedMb, setWhitelistedMb] = useState('')
+  const [defaults, setDefaults] = useState<{ limit: number; whitelisted: number } | null>(null)
   const [saving, setSaving] = useState(false)
+  const [resetting, setResetting] = useState(false)
 
   const load = () => {
     setLoading(true)
@@ -21,6 +23,9 @@ export function SettingsTab() {
       .then((info) => {
         setLimitMb(String(info.limit_mb))
         setWhitelistedMb(String(info.whitelisted_mb))
+        if (info.default_limit_mb != null && info.default_whitelisted_mb != null) {
+          setDefaults({ limit: info.default_limit_mb, whitelisted: info.default_whitelisted_mb })
+        }
       })
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -31,6 +36,7 @@ export function SettingsTab() {
   const wl = Number(whitelistedMb)
   const valid =
     Number.isInteger(limit) && limit >= 1 && Number.isInteger(wl) && wl >= limit
+  const atDefaults = defaults != null && limit === defaults.limit && wl === defaults.whitelisted
 
   const save = async () => {
     if (!valid) return
@@ -43,6 +49,19 @@ export function SettingsTab() {
       toast(e instanceof Error ? e.message : 'Save failed', 'error')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const reset = async () => {
+    setResetting(true)
+    try {
+      await resetUploadCaps()
+      toast('Restored config defaults')
+      load()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Reset failed', 'error')
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -74,21 +93,32 @@ export function SettingsTab() {
           loading={loading}
         />
         <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-3">
-          {!valid && !loading ? (
-            <span className="text-xs text-destructive">
-              Whitelisted cap must be ≥ the max upload size, and both ≥ 1.
-            </span>
-          ) : (
-            <span />
-          )}
           <button
-            onClick={save}
-            disabled={saving || loading || !valid}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
+            onClick={reset}
+            disabled={resetting || saving || loading || atDefaults}
+            title={
+              defaults
+                ? `Restore the node's configured caps (${defaults.limit} / ${defaults.whitelisted} MB)`
+                : "Restore the node's configured caps"
+            }
+            className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-neutral-400 hover:text-neutral-200 disabled:opacity-40 disabled:hover:text-neutral-400"
           >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save
+            {resetting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+            Reset to default{defaults ? ` (${defaults.limit} / ${defaults.whitelisted} MB)` : ''}
           </button>
+          <div className="flex items-center gap-3">
+            {!valid && !loading && (
+              <span className="text-xs text-destructive">Whitelisted cap must be ≥ the max upload size, and both ≥ 1.</span>
+            )}
+            <button
+              onClick={save}
+              disabled={saving || loading || !valid}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover disabled:opacity-60"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save
+            </button>
+          </div>
         </div>
       </div>
 

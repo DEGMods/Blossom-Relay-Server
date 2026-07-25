@@ -43,6 +43,9 @@ export interface WhitelistEntry {
 export interface WhitelistInfo {
   limit_mb: number
   whitelisted_mb: number
+  /** The node's configured defaults (what "reset" restores to). */
+  default_limit_mb?: number
+  default_whitelisted_mb?: number
   entries: WhitelistEntry[]
 }
 
@@ -140,6 +143,12 @@ export async function setUploadCaps(limitMb: number, whitelistedMb: number): Pro
     limit_mb: limitMb,
     whitelisted_mb: whitelistedMb,
   })
+  if (!res.ok) throw new Error(await reason(res))
+}
+
+/** Clear any runtime override and restore the node's configured caps. */
+export async function resetUploadCaps(): Promise<void> {
+  const res = await adminFetch('/admin/upload-caps', 'DELETE')
   if (!res.ok) throw new Error(await reason(res))
 }
 

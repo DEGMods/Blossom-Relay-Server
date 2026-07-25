@@ -229,10 +229,13 @@ func (s *Server) handleAdminWhitelistList(w http.ResponseWriter, r *http.Request
 		return
 	}
 	normalMB, whitelistMB := s.caps.snapshotMB()
+	defNormalMB, defWhitelistMB := s.caps.defaultsMB()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"limit_mb":       normalMB,
-		"whitelisted_mb": whitelistMB,
-		"entries":        s.white.list(),
+		"limit_mb":               normalMB,
+		"whitelisted_mb":         whitelistMB,
+		"default_limit_mb":       defNormalMB,
+		"default_whitelisted_mb": defWhitelistMB,
+		"entries":                s.white.list(),
 	})
 }
 
@@ -255,6 +258,21 @@ func (s *Server) handleAdminUploadCapsSet(w http.ResponseWriter, r *http.Request
 	}
 	if err := s.caps.set(body.LimitMB, body.WhitelistedMB); err != nil {
 		httpErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleAdminUploadCapsReset clears any runtime override and restores the caps
+// configured in the node's config file.
+func (s *Server) handleAdminUploadCapsReset(w http.ResponseWriter, r *http.Request) {
+	setAdminCORS(w)
+	if err := s.verifyAdmin(r); err != nil {
+		httpErr(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	if err := s.caps.reset(); err != nil {
+		httpErr(w, http.StatusInternalServerError, "reset failed")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
