@@ -53,6 +53,7 @@ type Server struct {
 	deletions          *deletions  // author-initiated NIP-09 takedowns (persistent)
 	owners             *blobOwners // hash -> uploader pubkey (persistent)
 	refs               *blobRefs   // hash -> mods that reference it (in-memory, dashboard labelling)
+	caps               *uploadCaps // per-upload size caps, runtime-adjustable (persistent)
 	adminPubkey        string      // hex; the only key allowed to delete blobs (moderation)
 
 	// admin blob-listing cache (avoids a full storage scan on every page click)
@@ -128,7 +129,12 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		deletions:          loadDeletions(filepath.Join(cfg.DataDir, "deletions.json")),
 		owners:             loadBlobOwners(filepath.Join(cfg.DataDir, "blob_owners.json")),
 		refs:               newBlobRefs(cfg.PublicURL),
-		adminPubkey:        resolvePubkey(cfg.Relay.AdminNpub),
+		caps: loadUploadCaps(
+			filepath.Join(cfg.DataDir, "upload_caps.json"),
+			int64(cfg.Upload.MaxSizeMB),   // normal default
+			int64(cfg.Upload.MaxSizeMB)*5, // whitelisted default (preserves the old 5× behaviour)
+		),
+		adminPubkey: resolvePubkey(cfg.Relay.AdminNpub),
 
 		powDifficulty:   cfg.Download.PoWDifficulty,
 		challengeTTL:    time.Duration(cfg.Download.ChallengeTTL) * time.Second,
@@ -190,6 +196,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 	mux.HandleFunc("GET /admin/whitelist", s.handleAdminWhitelistList)
 	mux.HandleFunc("POST /admin/whitelist", s.handleAdminWhitelistAdd)
 	mux.HandleFunc("DELETE /admin/whitelist", s.handleAdminWhitelistRemove)
+	mux.HandleFunc("PUT /admin/upload-caps", s.handleAdminUploadCapsSet)
 	mux.HandleFunc("GET /admin/banned-events", s.handleBannedEventsList)
 	mux.HandleFunc("POST /admin/banned-events", s.handleBanEvent)
 	mux.HandleFunc("DELETE /admin/banned-events", s.handleUnbanEvent)

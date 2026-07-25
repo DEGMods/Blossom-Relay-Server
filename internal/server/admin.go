@@ -220,19 +220,44 @@ func (s *Server) handleAdminBlobDownload(w http.ResponseWriter, r *http.Request)
 	http.ServeContent(w, r, filename, time.Time{}, rc)
 }
 
-// handleAdminWhitelistList returns the upload-size whitelist + the two size caps.
+// handleAdminWhitelistList returns the upload-size whitelist + the two size caps
+// (live values, so they reflect any runtime change made via /admin/upload-caps).
 func (s *Server) handleAdminWhitelistList(w http.ResponseWriter, r *http.Request) {
 	setAdminCORS(w)
 	if err := s.verifyAdmin(r); err != nil {
 		httpErr(w, http.StatusUnauthorized, err.Error())
 		return
 	}
-	mb := s.maxUploadBytes / (1024 * 1024)
+	normalMB, whitelistMB := s.caps.snapshotMB()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"limit_mb":       mb,
-		"whitelisted_mb": mb * 5,
+		"limit_mb":       normalMB,
+		"whitelisted_mb": whitelistMB,
 		"entries":        s.white.list(),
 	})
+}
+
+// handleAdminUploadCapsSet updates the per-upload size caps (normal + whitelisted),
+// in MB. Validated and persisted; the upload path reads the caps fresh, so the
+// change applies to the next upload.
+func (s *Server) handleAdminUploadCapsSet(w http.ResponseWriter, r *http.Request) {
+	setAdminCORS(w)
+	if err := s.verifyAdmin(r); err != nil {
+		httpErr(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	var body struct {
+		LimitMB       int64 `json:"limit_mb"`
+		WhitelistedMB int64 `json:"whitelisted_mb"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		httpErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if err := s.caps.set(body.LimitMB, body.WhitelistedMB); err != nil {
+		httpErr(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) handleAdminWhitelistAdd(w http.ResponseWriter, r *http.Request) {

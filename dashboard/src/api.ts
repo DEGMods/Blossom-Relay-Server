@@ -134,6 +134,15 @@ export async function removeWhitelist(pubkey: string): Promise<void> {
   if (!res.ok) throw new Error(await reason(res))
 }
 
+/** Update the per-upload size caps (MB). Whitelisted must be ≥ the normal cap. */
+export async function setUploadCaps(limitMb: number, whitelistedMb: number): Promise<void> {
+  const res = await adminFetch('/admin/upload-caps', 'PUT', {
+    limit_mb: limitMb,
+    whitelisted_mb: whitelistedMb,
+  })
+  if (!res.ok) throw new Error(await reason(res))
+}
+
 // ─── helpers ────────────────────────────────────────────────────────
 
 export function formatBytes(n: number): string {

@@ -174,13 +174,15 @@ var (
 // rateWindow is the interval over which minimum upload throughput is measured.
 const rateWindow = 5 * time.Second
 
-// uploadLimitFor returns the max upload size for a pubkey — 5× the normal cap for
-// whitelisted keys.
+// uploadLimitFor returns the max upload size for a pubkey — the raised cap for
+// whitelisted keys, the normal cap otherwise. Read fresh from the (runtime-
+// adjustable) caps store on every call, so a dashboard change applies to the next
+// upload without disturbing any already in flight.
 func (s *Server) uploadLimitFor(pubkey string) int64 {
 	if s.white.has(pubkey) {
-		return s.maxUploadBytes * 5
+		return s.caps.whitelistBytes()
 	}
-	return s.maxUploadBytes
+	return s.caps.normalBytes()
 }
 
 // streamBody copies the request body to dst, enforcing the size cap, an idle
