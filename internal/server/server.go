@@ -12,12 +12,14 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/DEGMods/Blossom-Relay-Server/dashboard"
 	"github.com/DEGMods/Blossom-Relay-Server/internal/config"
 	"github.com/DEGMods/Blossom-Relay-Server/internal/storage"
 	"github.com/fiatjaf/eventstore/badger"
@@ -189,6 +191,18 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		setAdminCORS(w)
 		w.WriteHeader(http.StatusNoContent)
 	})
+	// Admin dashboard (embedded SPA). More specific than "/", so ServeMux routes
+	// /dashboard/* here regardless of registration order. The app itself calls
+	// the same-origin /admin/* endpoints, which stay NIP-98 admin-gated — the
+	// static assets are public, the actions behind them are not.
+	if sub, err := fs.Sub(dashboard.Assets, "dist"); err == nil {
+		fileServer := http.StripPrefix("/dashboard/", http.FileServerFS(sub))
+		mux.HandleFunc("GET /dashboard", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/dashboard/", http.StatusMovedPermanently)
+		})
+		mux.Handle("GET /dashboard/", fileServer)
+	}
+
 	mux.Handle("/", s.gate(relay)) // BUD-POW/BUD-Ads gate on blob GET; pass-through otherwise
 	s.handler = mux
 
