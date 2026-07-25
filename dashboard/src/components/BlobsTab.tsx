@@ -3,7 +3,7 @@ import {
   Loader2, Search, Trash2, Download, Copy, Check, ChevronLeft, ChevronRight,
   ArrowUp, ArrowDown, AlertTriangle,
 } from 'lucide-react'
-import { listBlobs, deleteBlob, downloadBlob, formatBytes, type BlobsPage, type BlobSort } from '../api'
+import { listBlobs, deleteBlob, downloadBlob, formatBytes, type BlobsPage, type BlobSort, type ModRef } from '../api'
 import { npubEncode } from '../nostr'
 import { cn, truncateMiddle, formatDate } from '../lib'
 import { toast } from '../toast'
@@ -131,13 +131,8 @@ export function BlobsTab() {
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-neutral-300">{formatBytes(b.size)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-neutral-400">{formatDate(b.added)}</td>
-                    {/* Placeholder — reference tracking / expiry (the "Fix C" work) isn't built. */}
-                    <td className="px-3 py-2" title="Reference tracking not enabled yet">
-                      <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-neutral-400">
-                        Permanent
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-neutral-600" title="Not tracked yet">—</td>
+                    <td className="px-3 py-2"><StateCell refs={b.refs} /></td>
+                    <td className="px-3 py-2 text-neutral-400"><ModCell refs={b.refs} /></td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-1">
                         <DownloadButton hash={b.hash} ext={b.ext} />
@@ -227,6 +222,47 @@ function DownloadButton({ hash, ext }: { hash: string; ext: string }) {
 
 function HashCell({ hash }: { hash: string }) {
   return <Copyable full={hash} display={truncateMiddle(hash, 12, 8)} />
+}
+
+/**
+ * Claimed = a mod stored on THIS relay references the blob. Unclaimed doesn't mean
+ * orphaned — the mod may live on another relay — so the tooltip says "verify before
+ * removing". Labelling only; nothing here deletes or gates anything.
+ */
+function StateCell({ refs }: { refs?: ModRef[] }) {
+  if (refs && refs.length > 0) {
+    return (
+      <span
+        className="rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-medium text-success"
+        title={`Referenced by ${refs.length} mod${refs.length > 1 ? 's' : ''} on this relay`}
+      >
+        Claimed
+      </span>
+    )
+  }
+  return (
+    <span
+      className="rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-neutral-400"
+      title="No mod stored on this relay references this file. It may still belong to a mod hosted elsewhere — verify before removing."
+    >
+      Unclaimed
+    </span>
+  )
+}
+
+/** The mod(s) referencing a blob: first title (or coordinate), "+N" for the rest. */
+function ModCell({ refs }: { refs?: ModRef[] }) {
+  if (!refs || refs.length === 0) return <span className="text-neutral-600">—</span>
+  const first = refs[0]
+  const label = first.title.trim() || first.coord
+  const rest = refs.length - 1
+  const tip = refs.map((r) => (r.title.trim() ? `${r.title} — ${r.coord}` : r.coord)).join('\n')
+  return (
+    <span className="inline-flex max-w-[200px] items-center gap-1" title={tip}>
+      <span className="truncate">{label}</span>
+      {rest > 0 && <span className="shrink-0 text-neutral-600">+{rest}</span>}
+    </span>
+  )
 }
 
 /** Truncated mono text with a click-to-copy button; copies the full value. */

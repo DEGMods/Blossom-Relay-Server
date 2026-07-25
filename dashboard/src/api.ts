@@ -9,6 +9,13 @@
  */
 import { nip98Header } from './nostr'
 
+/** A mod (or other stored event) that references a blob. */
+export interface ModRef {
+  /** Addressable coordinate "<kind>:<pubkey>:<d>", or the event id. */
+  coord: string
+  /** The mod's title, or "" if it has none. */
+  title: string
+}
 export interface AdminBlob {
   hash: string
   ext: string
@@ -17,6 +24,8 @@ export interface AdminBlob {
   added: number
   /** Uploader pubkey (hex). Empty for blobs uploaded before this was tracked. */
   pubkey?: string
+  /** Mods that reference this blob. Empty/absent = no stored mod references it. */
+  refs?: ModRef[]
 }
 export interface BlobsPage {
   total: number

@@ -158,6 +158,12 @@ func (s *Server) setupRelay(store *badger.BadgerBackend, adminPubkey string) {
 	r.RejectFilter = append(r.RejectFilter, s.rejectFilter)
 	// Persist author-initiated NIP-09 deletions so re-ingest can't resurrect them.
 	r.OverwriteDeletionOutcome = append(r.OverwriteDeletionOutcome, s.onDeletionOutcome)
+	// Label blobs against the mods that reference them (dashboard only). This runs
+	// after the event is stored and its return value is ignored, so it can never
+	// reject an event or change what gets persisted — pure observation.
+	r.OnEventSaved = append(r.OnEventSaved, func(_ context.Context, evt *nostr.Event) {
+		s.refs.note(evt)
+	})
 
 	if adminPubkey == "" {
 		return // NIP-86 disabled when no admin configured

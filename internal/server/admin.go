@@ -158,12 +158,13 @@ func (s *Server) handleAdminBlobs(w http.ResponseWriter, r *http.Request) {
 	end := minInt(start+per, total)
 
 	type blobDTO struct {
-		Hash   string `json:"hash"`
-		Ext    string `json:"ext"`
-		Size   int64  `json:"size"`
-		URL    string `json:"url"`
-		Added  int64  `json:"added"`            // unix seconds; 0 if unknown
-		Pubkey string `json:"pubkey,omitempty"` // uploader; empty if uploaded before this was tracked
+		Hash   string   `json:"hash"`
+		Ext    string   `json:"ext"`
+		Size   int64    `json:"size"`
+		URL    string   `json:"url"`
+		Added  int64    `json:"added"`            // unix seconds; 0 if unknown
+		Pubkey string   `json:"pubkey,omitempty"` // uploader; empty if uploaded before this was tracked
+		Refs   []modRef `json:"refs,omitempty"`   // mods that reference this blob; empty = unclaimed
 	}
 	items := make([]blobDTO, 0, end-start)
 	for _, b := range filtered[start:end] {
@@ -174,6 +175,7 @@ func (s *Server) handleAdminBlobs(w http.ResponseWriter, r *http.Request) {
 		items = append(items, blobDTO{
 			Hash: b.Hash, Ext: b.Ext, Size: b.Size,
 			URL: s.publicURL + "/" + b.Key, Added: added, Pubkey: s.owners.get(b.Hash),
+			Refs: s.refs.refsFor(b.Hash),
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{

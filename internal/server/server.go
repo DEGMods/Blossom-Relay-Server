@@ -52,6 +52,7 @@ type Server struct {
 	bannedEv           *bannedEvents
 	deletions          *deletions  // author-initiated NIP-09 takedowns (persistent)
 	owners             *blobOwners // hash -> uploader pubkey (persistent)
+	refs               *blobRefs   // hash -> mods that reference it (in-memory, dashboard labelling)
 	adminPubkey        string      // hex; the only key allowed to delete blobs (moderation)
 
 	// admin blob-listing cache (avoids a full storage scan on every page click)
@@ -126,6 +127,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		bannedEv:           loadBannedEvents(filepath.Join(cfg.DataDir, "banned_events.json")),
 		deletions:          loadDeletions(filepath.Join(cfg.DataDir, "deletions.json")),
 		owners:             loadBlobOwners(filepath.Join(cfg.DataDir, "blob_owners.json")),
+		refs:               newBlobRefs(cfg.PublicURL),
 		adminPubkey:        resolvePubkey(cfg.Relay.AdminNpub),
 
 		powDifficulty:   cfg.Download.PoWDifficulty,
@@ -160,6 +162,9 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 	}
 
 	s.setupRelay(store, s.adminPubkey)
+	// Label existing blobs against the mods already stored (dashboard only). Runs
+	// before we start serving, so no ingest can race it.
+	s.backfillRefs(context.Background())
 
 	// Streaming /upload in front; everything else (blossom GET, relay WS, NIP-11,
 	// NIP-86) → the relay.
