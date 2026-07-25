@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Boxes, HardDrive, ShieldCheck, Settings2, LogOut, Loader2, KeyRound, Flame } from 'lucide-react'
 import { connect, hasExtension, npubEncode } from './nostr'
 import { getWhitelist } from './api'
@@ -98,7 +98,25 @@ export function App() {
 }
 
 function Login({ connecting, onLogin }: { connecting: boolean; onLogin: () => void }) {
-  const ext = hasExtension()
+  // Extensions inject window.nostr a moment AFTER the page loads, so a one-time
+  // check on first render often runs too early and wrongly reports "none". Poll
+  // for a few seconds; the button stays available the whole time either way, so
+  // even a slow-injecting or click-to-grant extension still works.
+  const [ext, setExt] = useState(hasExtension())
+  useEffect(() => {
+    if (ext) return
+    let tries = 0
+    const iv = setInterval(() => {
+      if (hasExtension()) {
+        setExt(true)
+        clearInterval(iv)
+      } else if (++tries > 25) {
+        clearInterval(iv) // ~5s
+      }
+    }, 200)
+    return () => clearInterval(iv)
+  }, [ext])
+
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-5 rounded-xl border border-border bg-card p-6 text-center">
@@ -115,18 +133,19 @@ function Login({ connecting, onLogin }: { connecting: boolean; onLogin: () => vo
           </p>
         </div>
 
-        {ext ? (
-          <button
-            onClick={onLogin}
-            disabled={connecting}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
-          >
-            {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-            {connecting ? 'Connecting…' : 'Connect extension'}
-          </button>
-        ) : (
+        <button
+          onClick={onLogin}
+          disabled={connecting}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
+        >
+          {connecting ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
+          {connecting ? 'Connecting…' : 'Connect extension'}
+        </button>
+
+        {!ext && (
           <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
-            No Nostr extension detected. Install one (Alby, nos2x, …) to sign in.
+            No extension detected yet. If you have one (Alby, nos2x, …), make sure it’s enabled for
+            this site, then click Connect.
           </p>
         )}
       </div>
