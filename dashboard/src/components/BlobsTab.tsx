@@ -124,9 +124,7 @@ export function BlobsTab() {
                     <td className="px-3 py-2 text-neutral-400">{b.ext ? `.${b.ext}` : '—'}</td>
                     <td className="px-3 py-2 font-mono text-xs">
                       {b.pubkey ? (
-                        <span className="text-neutral-300" title={npubEncode(b.pubkey)}>
-                          {truncateMiddle(npubEncode(b.pubkey), 10, 6)}
-                        </span>
+                        <Copyable full={npubEncode(b.pubkey)} display={truncateMiddle(npubEncode(b.pubkey), 10, 6)} />
                       ) : (
                         <span className="text-neutral-600" title="Uploaded before uploaders were tracked">—</span>
                       )}
@@ -228,18 +226,23 @@ function DownloadButton({ hash, ext }: { hash: string; ext: string }) {
 }
 
 function HashCell({ hash }: { hash: string }) {
+  return <Copyable full={hash} display={truncateMiddle(hash, 12, 8)} />
+}
+
+/** Truncated mono text with a click-to-copy button; copies the full value. */
+function Copyable({ full, display }: { full: string; display: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <button
       onClick={() => {
-        navigator.clipboard.writeText(hash)
+        navigator.clipboard.writeText(full)
         setCopied(true)
         setTimeout(() => setCopied(false), 1500)
       }}
       className="inline-flex items-center gap-1.5 hover:text-white"
-      title={hash}
+      title={copied ? 'Copied' : `Copy — ${full}`}
     >
-      {truncateMiddle(hash, 12, 8)}
+      {display}
       {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3 text-neutral-600" />}
     </button>
   )
