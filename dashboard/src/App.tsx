@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react'
-import { Boxes, HardDrive, ShieldCheck, Settings2, LogOut, Loader2, KeyRound, Flame } from 'lucide-react'
+import { Boxes, HardDrive, ShieldCheck, Settings2, LogOut, Loader2, KeyRound, Flame, Radio } from 'lucide-react'
 import { connect, hasExtension, npubEncode } from './nostr'
 import { getWhitelist } from './api'
 import { cn, truncateMiddle } from './lib'
 import { toast, Toaster } from './toast'
 import { BlobsTab } from './components/BlobsTab'
+import { RelayTab } from './components/RelayTab'
 import { WhitelistTab } from './components/WhitelistTab'
 import { SettingsTab } from './components/SettingsTab'
 
 const SESSION_KEY = 'brs-dashboard:pubkey'
-type Tab = 'blobs' | 'whitelist' | 'settings'
+type Tab = 'blobs' | 'relay' | 'whitelist' | 'settings'
 
 const TABS: { id: Tab; label: string; icon: typeof Boxes }[] = [
   { id: 'blobs', label: 'Files', icon: HardDrive },
+  { id: 'relay', label: 'Relay', icon: Radio },
   { id: 'whitelist', label: 'Whitelist', icon: ShieldCheck },
   { id: 'settings', label: 'Settings', icon: Settings2 },
 ]
@@ -88,6 +90,7 @@ export function App() {
         </div>
 
         {tab === 'blobs' && <BlobsTab />}
+        {tab === 'relay' && <RelayTab />}
         {tab === 'whitelist' && <WhitelistTab />}
         {tab === 'settings' && <SettingsTab />}
       </div>

@@ -36,6 +36,35 @@ export interface BlobsPage {
   blobs: AdminBlob[]
 }
 export type BlobSort = 'hash' | 'size' | 'date'
+
+// ─── Relay events ───────────────────────────────────────────────────
+
+export interface RelayEvent {
+  id: string
+  pubkey: string
+  created_at: number
+  kind: number
+  tags: string[][]
+  content: string
+  sig: string
+}
+export interface EventsPage {
+  events: RelayEvent[]
+  count: number
+  /** true = the limit or scan ceiling was hit; more may exist. */
+  truncated: boolean
+  /** how many stored events were examined. */
+  scanned: number
+}
+export interface EventsQuery {
+  kinds?: number[]
+  author?: string
+  tags?: { name: string; value: string }[]
+  since?: number
+  until?: number
+  limit?: number
+  search?: string
+}
 export interface WhitelistEntry {
   pubkey: string
   note?: string
@@ -107,6 +136,23 @@ export async function downloadBlob(hash: string, ext: string): Promise<void> {
   a.click()
   a.remove()
   URL.revokeObjectURL(objUrl)
+}
+
+/** Query stored relay events by the given filters (all optional). Read-only. */
+export async function queryEvents(opts: EventsQuery = {}): Promise<EventsPage> {
+  const q = new URLSearchParams()
+  if (opts.kinds?.length) q.set('kinds', opts.kinds.join(','))
+  if (opts.author?.trim()) q.set('author', opts.author.trim())
+  for (const t of opts.tags ?? []) {
+    if (t.name.trim() && t.value.trim()) q.append('tag', `${t.name.trim()}:${t.value.trim()}`)
+  }
+  if (opts.since) q.set('since', String(opts.since))
+  if (opts.until) q.set('until', String(opts.until))
+  if (opts.limit) q.set('limit', String(opts.limit))
+  if (opts.search?.trim()) q.set('search', opts.search.trim())
+  const res = await adminFetch(`/admin/events?${q.toString()}`, 'GET')
+  if (!res.ok) throw new Error(await reason(res))
+  return res.json()
 }
 
 /** Delete a blob by hash (admin-authed DELETE /<hash>). */

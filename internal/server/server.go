@@ -191,6 +191,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 	}
 	// Admin API (NIP-98 auth, admin key). Blob deletion via DELETE /<hash>.
 	mux.HandleFunc("DELETE /{hash}", s.handleDelete)
+	mux.HandleFunc("GET /admin/events", s.handleAdminEvents)
 	mux.HandleFunc("GET /admin/blobs", s.handleAdminBlobs)
 	mux.HandleFunc("GET /admin/blob/{hash}", s.handleAdminBlobDownload) // gate-free admin download
 	mux.HandleFunc("GET /admin/whitelist", s.handleAdminWhitelistList)
