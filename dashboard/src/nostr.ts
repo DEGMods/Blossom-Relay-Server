@@ -71,6 +71,33 @@ export function npubEncode(hex: string): string {
   }
 }
 
+/**
+ * Addressable coordinate "kind:pubkey:dtag" → naddr (NIP-19). The TLV carries the
+ * kind (type 3), author pubkey (type 2), and d identifier (type 0), in that order
+ * to match nostr-tools byte-for-byte; no relay hints. Returns the raw coordinate
+ * unchanged if it isn't a well-formed coordinate.
+ */
+export function naddrEncode(coord: string): string {
+  try {
+    const i1 = coord.indexOf(':')
+    const i2 = coord.indexOf(':', i1 + 1)
+    if (i1 < 0 || i2 < 0) return coord
+    const kind = parseInt(coord.slice(0, i1), 10)
+    const pubkey = coord.slice(i1 + 1, i2)
+    const dtag = coord.slice(i2 + 1)
+    if (!Number.isInteger(kind) || pubkey.length !== 64) return coord
+
+    const tlv: number[] = []
+    const push = (type: number, value: number[]) => tlv.push(type, value.length, ...value)
+    push(3, [(kind >>> 24) & 0xff, (kind >>> 16) & 0xff, (kind >>> 8) & 0xff, kind & 0xff]) // kind (uint32 BE)
+    push(2, hexToBytes(pubkey))                          // author
+    push(0, Array.from(new TextEncoder().encode(dtag))) // special: the d identifier
+    return bech32Encode('naddr', tlv)
+  } catch {
+    return coord
+  }
+}
+
 // ─── minimal bech32 (npub display only) ─────────────────────────────
 const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
 

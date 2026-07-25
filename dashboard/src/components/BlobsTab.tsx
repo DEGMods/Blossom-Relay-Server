@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
   Loader2, Search, Trash2, Download, Copy, Check, ChevronLeft, ChevronRight,
   ArrowUp, ArrowDown, AlertTriangle,
 } from 'lucide-react'
 import { listBlobs, deleteBlob, downloadBlob, formatBytes, type BlobsPage, type BlobSort, type ModRef } from '../api'
-import { npubEncode } from '../nostr'
+import { npubEncode, naddrEncode } from '../nostr'
 import { cn, truncateMiddle, formatDate } from '../lib'
 import { toast } from '../toast'
 
@@ -250,23 +250,37 @@ function StateCell({ refs }: { refs?: ModRef[] }) {
   )
 }
 
-/** The mod(s) referencing a blob: first title (or coordinate), "+N" for the rest. */
+/**
+ * The mod(s) referencing a blob. Shows the first mod's title (falling back to its
+ * naddr) as a click-to-copy button that copies the naddr; "+N" marks any others,
+ * with all of them listed in the hover tooltip.
+ */
 function ModCell({ refs }: { refs?: ModRef[] }) {
   if (!refs || refs.length === 0) return <span className="text-neutral-600">—</span>
   const first = refs[0]
-  const label = first.title.trim() || first.coord
+  const naddr = naddrEncode(first.coord)
+  const label = first.title.trim() || truncateMiddle(naddr, 12, 8)
   const rest = refs.length - 1
-  const tip = refs.map((r) => (r.title.trim() ? `${r.title} — ${r.coord}` : r.coord)).join('\n')
+  const tip = refs
+    .map((r) => {
+      const a = naddrEncode(r.coord)
+      return r.title.trim() ? `${r.title} — ${a}` : a
+    })
+    .join('\n')
   return (
-    <span className="inline-flex max-w-[200px] items-center gap-1" title={tip}>
-      <span className="truncate">{label}</span>
-      {rest > 0 && <span className="shrink-0 text-neutral-600">+{rest}</span>}
+    <span className="inline-flex max-w-[220px] items-center gap-1">
+      <Copyable full={naddr} display={<span className="truncate">{label}</span>} className="max-w-[170px]" />
+      {rest > 0 && (
+        <span className="shrink-0 text-neutral-600" title={tip}>
+          +{rest}
+        </span>
+      )}
     </span>
   )
 }
 
-/** Truncated mono text with a click-to-copy button; copies the full value. */
-function Copyable({ full, display }: { full: string; display: string }) {
+/** Text with a click-to-copy button; copies the full value, shows `display`. */
+function Copyable({ full, display, className }: { full: string; display: ReactNode; className?: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <button
@@ -275,11 +289,11 @@ function Copyable({ full, display }: { full: string; display: string }) {
         setCopied(true)
         setTimeout(() => setCopied(false), 1500)
       }}
-      className="inline-flex items-center gap-1.5 hover:text-white"
+      className={cn('inline-flex min-w-0 items-center gap-1.5 hover:text-white', className)}
       title={copied ? 'Copied' : `Copy — ${full}`}
     >
       {display}
-      {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3 text-neutral-600" />}
+      {copied ? <Check className="h-3 w-3 shrink-0 text-success" /> : <Copy className="h-3 w-3 shrink-0 text-neutral-600" />}
     </button>
   )
 }
