@@ -245,12 +245,17 @@ func (s *Server) handleUploadHead(w http.ResponseWriter, r *http.Request) {
 		httpErr(w, http.StatusUnauthorized, err.Error())
 		return
 	}
-	if _, err := s.verifyUploadAuth(evt); err != nil {
+	hash, err := s.verifyUploadAuth(evt)
+	if err != nil {
 		httpErr(w, http.StatusUnauthorized, err.Error())
 		return
 	}
 	if s.blocked(evt.PubKey) {
 		httpErr(w, http.StatusForbidden, "blocked")
+		return
+	}
+	if s.blacklist.has(hash) {
+		httpErr(w, http.StatusForbidden, "this file is not permitted on this server")
 		return
 	}
 	if sz := r.Header.Get("X-Content-Length"); sz != "" {
@@ -285,6 +290,10 @@ func (s *Server) handleUploadPut(w http.ResponseWriter, r *http.Request) {
 	}
 	if s.blocked(evt.PubKey) {
 		httpErr(w, http.StatusForbidden, "blocked")
+		return
+	}
+	if s.blacklist.has(claimed) {
+		httpErr(w, http.StatusForbidden, "this file is not permitted on this server")
 		return
 	}
 	limit := s.uploadLimitFor(evt.PubKey)

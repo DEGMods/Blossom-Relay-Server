@@ -55,6 +55,7 @@ type Server struct {
 	owners             *blobOwners // hash -> uploader pubkey (persistent)
 	refs               *blobRefs   // hash -> mods that reference it (in-memory, dashboard labelling)
 	caps               *uploadCaps // per-upload size caps, runtime-adjustable (persistent)
+	blacklist          *blacklistedHashes // blob hashes barred from upload/download (persistent)
 	adminPubkey        string      // hex; the only key allowed to delete blobs (moderation)
 
 	// admin blob-listing cache (avoids a full storage scan on every page click)
@@ -136,6 +137,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 			int64(cfg.Upload.MaxSizeMB),   // normal default
 			int64(cfg.Upload.MaxSizeMB)*5, // whitelisted default (preserves the old 5× behaviour)
 		),
+		blacklist:   loadBlacklist(filepath.Join(cfg.DataDir, "blacklist.json")),
 		adminPubkey: resolvePubkey(cfg.Relay.AdminNpub),
 
 		powDifficulty:   cfg.Download.PoWDifficulty,
@@ -197,6 +199,10 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 	mux.HandleFunc("GET /admin/events", s.handleAdminEvents)
 	mux.HandleFunc("GET /admin/blobs", s.handleAdminBlobs)
 	mux.HandleFunc("GET /admin/blob/{hash}", s.handleAdminBlobDownload) // gate-free admin download
+	mux.HandleFunc("DELETE /admin/blob/{hash}", s.handleAdminBlobDelete) // NIP-98 admin delete (dashboard)
+	mux.HandleFunc("GET /admin/blacklist", s.handleBlacklistList)
+	mux.HandleFunc("POST /admin/blacklist", s.handleBlacklistAdd)
+	mux.HandleFunc("DELETE /admin/blacklist", s.handleBlacklistRemove)
 	mux.HandleFunc("GET /admin/whitelist", s.handleAdminWhitelistList)
 	mux.HandleFunc("POST /admin/whitelist", s.handleAdminWhitelistAdd)
 	mux.HandleFunc("DELETE /admin/whitelist", s.handleAdminWhitelistRemove)

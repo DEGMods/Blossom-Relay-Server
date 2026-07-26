@@ -4,7 +4,7 @@ import { connect, hasExtension, npubEncode } from './nostr'
 import { getWhitelist } from './api'
 import { cn, truncateMiddle } from './lib'
 import { toast, Toaster } from './toast'
-import { BlobsTab } from './components/BlobsTab'
+import { FilesTab } from './components/FilesTab'
 import { RelayTab } from './components/RelayTab'
 import { WhitelistTab } from './components/WhitelistTab'
 import { SettingsTab } from './components/SettingsTab'
@@ -89,7 +89,7 @@ export function App() {
           ))}
         </div>
 
-        {tab === 'blobs' && <BlobsTab />}
+        {tab === 'blobs' && <FilesTab />}
         {tab === 'relay' && <RelayTab />}
         {tab === 'whitelist' && <WhitelistTab />}
         {tab === 'settings' && <SettingsTab />}

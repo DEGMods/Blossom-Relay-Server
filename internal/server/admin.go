@@ -220,6 +220,97 @@ func (s *Server) handleAdminBlobDownload(w http.ResponseWriter, r *http.Request)
 	http.ServeContent(w, r, filename, time.Time{}, rc)
 }
 
+// handleAdminBlobDelete deletes a blob via NIP-98 admin auth — the delete path the
+// dashboard uses. (The public DELETE /<hash> takes a BUD-compliant kind-24242
+// authorization instead; the dashboard signs NIP-98 like every other admin call.)
+func (s *Server) handleAdminBlobDelete(w http.ResponseWriter, r *http.Request) {
+	setAdminCORS(w)
+	if err := s.verifyAdmin(r); err != nil {
+		httpErr(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	name := r.PathValue("hash")
+	hash := name
+	if dot := strings.IndexByte(name, '.'); dot >= 0 {
+		hash = name[:dot]
+	}
+	if !isSHA256Hex(hash) {
+		httpErr(w, http.StatusBadRequest, "bad hash")
+		return
+	}
+	if err := s.storage.Delete(r.Context(), hash, ""); err != nil {
+		httpErr(w, http.StatusBadGateway, "storage delete failed")
+		return
+	}
+	s.owners.remove(hash)
+	s.invalidateBlobCache()
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleBlacklistList returns the blacklisted-hash entries.
+func (s *Server) handleBlacklistList(w http.ResponseWriter, r *http.Request) {
+	setAdminCORS(w)
+	if err := s.verifyAdmin(r); err != nil {
+		httpErr(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"entries": s.blacklist.list()})
+}
+
+// handleBlacklistAdd blacklists a hash and purges any stored copy — so it's both
+// removed now and barred from re-upload. Blacklisting a not-yet-stored hash is a
+// valid pre-emptive block (the purge is then a no-op).
+func (s *Server) handleBlacklistAdd(w http.ResponseWriter, r *http.Request) {
+	setAdminCORS(w)
+	if err := s.verifyAdmin(r); err != nil {
+		httpErr(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	var body struct {
+		Hash   string `json:"hash"`
+		Reason string `json:"reason"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		httpErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	hash := strings.ToLower(strings.TrimSpace(body.Hash))
+	if !isSHA256Hex(hash) {
+		httpErr(w, http.StatusBadRequest, "invalid hash")
+		return
+	}
+	if err := s.blacklist.add(hash, strings.TrimSpace(body.Reason)); err != nil {
+		httpErr(w, http.StatusInternalServerError, "save failed")
+		return
+	}
+	// Purge the stored object too (best-effort — the entry is what enforces the ban).
+	_ = s.storage.Delete(r.Context(), hash, "")
+	s.owners.remove(hash)
+	s.invalidateBlobCache()
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleBlacklistRemove lifts a blacklist entry (does not restore any bytes).
+func (s *Server) handleBlacklistRemove(w http.ResponseWriter, r *http.Request) {
+	setAdminCORS(w)
+	if err := s.verifyAdmin(r); err != nil {
+		httpErr(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	var body struct {
+		Hash string `json:"hash"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		httpErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	if err := s.blacklist.remove(strings.ToLower(strings.TrimSpace(body.Hash))); err != nil {
+		httpErr(w, http.StatusInternalServerError, "save failed")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // handleAdminWhitelistList returns the upload-size whitelist + the two size caps
 // (live values, so they reflect any runtime change made via /admin/upload-caps).
 func (s *Server) handleAdminWhitelistList(w http.ResponseWriter, r *http.Request) {

@@ -190,13 +190,35 @@ export async function queryEvents(opts: EventsQuery = {}): Promise<EventsPage> {
   return res.json()
 }
 
-/** Delete a blob by hash (admin-authed DELETE /<hash>). */
+/** Delete a blob by hash (NIP-98 admin DELETE /admin/blob/<hash>). */
 export async function deleteBlob(hash: string): Promise<void> {
-  const url = new URL(`/${hash}`, window.location.origin).toString()
-  const res = await fetch(url, {
-    method: 'DELETE',
-    headers: { Authorization: await nip98Header(url, 'DELETE') },
-  })
+  const res = await adminFetch(`/admin/blob/${hash}`, 'DELETE')
+  if (!res.ok) throw new Error(await reason(res))
+}
+
+// ─── Blacklisted hashes ─────────────────────────────────────────────
+
+export interface BlacklistEntry {
+  hash: string
+  reason?: string
+  added?: number
+}
+
+export async function getBlacklist(): Promise<BlacklistEntry[]> {
+  const res = await adminFetch('/admin/blacklist', 'GET')
+  if (!res.ok) throw new Error(await reason(res))
+  return (await res.json()).entries ?? []
+}
+
+/** Blacklist a hash (blocks re-upload) and purge any stored copy. */
+export async function addBlacklist(hash: string, note?: string): Promise<void> {
+  const res = await adminFetch('/admin/blacklist', 'POST', { hash, reason: note })
+  if (!res.ok) throw new Error(await reason(res))
+}
+
+/** Lift a blacklist entry (does not restore any bytes). */
+export async function removeBlacklist(hash: string): Promise<void> {
+  const res = await adminFetch('/admin/blacklist', 'DELETE', { hash })
   if (!res.ok) throw new Error(await reason(res))
 }
 

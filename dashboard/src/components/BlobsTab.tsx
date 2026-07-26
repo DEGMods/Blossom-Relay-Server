@@ -3,7 +3,7 @@ import {
   Loader2, Search, Trash2, Download, Copy, Check, ChevronLeft, ChevronRight,
   ArrowUp, ArrowDown, AlertTriangle,
 } from 'lucide-react'
-import { listBlobs, deleteBlob, downloadBlob, formatBytes, type BlobsPage, type BlobSort, type ModRef } from '../api'
+import { listBlobs, deleteBlob, downloadBlob, addBlacklist, formatBytes, type BlobsPage, type BlobSort, type ModRef } from '../api'
 import { npubEncode, naddrEncode } from '../nostr'
 import { cn, truncateMiddle, formatDate } from '../lib'
 import { toast } from '../toast'
@@ -324,11 +324,18 @@ function SortTh({
 
 function DeleteConfirm({ hash, onClose, onDeleted }: { hash: string; onClose: () => void; onDeleted: () => void }) {
   const [busy, setBusy] = useState(false)
+  const [blacklist, setBlacklist] = useState(false)
+  const [reason, setReason] = useState('')
   const del = async () => {
     setBusy(true)
     try {
-      await deleteBlob(hash)
-      toast('File deleted')
+      if (blacklist) {
+        await addBlacklist(hash, reason.trim() || undefined)
+        toast('File deleted and blacklisted')
+      } else {
+        await deleteBlob(hash)
+        toast('File deleted')
+      }
       onDeleted()
     } catch (e) {
       toast(e instanceof Error ? e.message : 'Delete failed', 'error')
@@ -353,6 +360,31 @@ function DeleteConfirm({ hash, onClose, onDeleted }: { hash: string; onClose: ()
             </p>
           </div>
         </div>
+
+        {/* Optional: also blacklist so the same bytes can't be re-uploaded. */}
+        <div className="space-y-2 rounded-lg border border-border/60 bg-[#1a1a1a] p-3">
+          <label className="flex cursor-pointer items-start gap-2 text-xs text-neutral-300">
+            <input
+              type="checkbox"
+              checked={blacklist}
+              onChange={(e) => setBlacklist(e.target.checked)}
+              className="mt-0.5 accent-[hsl(263_70%_58%)]"
+            />
+            <span>
+              Also blacklist this hash
+              <span className="block text-neutral-500">Blocks re-upload of the same bytes — the takedown sticks.</span>
+            </span>
+          </label>
+          {blacklist && (
+            <input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Reason (optional)"
+              className="w-full rounded-lg border border-border bg-[#212121] px-3 py-1.5 text-xs text-white placeholder:text-muted-foreground focus:border-[#404040] focus:outline-none"
+            />
+          )}
+        </div>
+
         <div className="flex justify-end gap-2">
           <button
             onClick={onClose}
@@ -367,7 +399,7 @@ function DeleteConfirm({ hash, onClose, onDeleted }: { hash: string; onClose: ()
             className="inline-flex items-center gap-1.5 rounded-lg bg-destructive px-3 py-1.5 text-xs font-medium text-destructive-foreground hover:opacity-90 disabled:opacity-60"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-            Delete
+            {blacklist ? 'Delete + blacklist' : 'Delete'}
           </button>
         </div>
       </div>

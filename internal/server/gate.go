@@ -168,6 +168,12 @@ func (s *Server) gate(next http.Handler) http.Handler {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		// Blacklisted content is gone here regardless of the gate: retrieval 404s
+		// (as if deleted), and re-upload is rejected in the upload handler.
+		if (r.Method == http.MethodGet || r.Method == http.MethodHead) && s.blacklist.has(hash) {
+			httpErr(w, http.StatusNotFound, "not found")
+			return
+		}
 		if (r.Method == http.MethodGet || r.Method == http.MethodHead) && (s.powDifficulty > 0 || s.adGate) {
 			if !s.checkGates(w, r, hash) {
 				return
