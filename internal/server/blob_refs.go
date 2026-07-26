@@ -27,6 +27,13 @@ type modRef struct {
 // (note, called from the relay's OnEventSaved hook). Any drift errs only toward
 // over-claiming — e.g. a replaced mod's previous file stays "claimed" — which is
 // the safe direction for a store that never auto-removes a blob.
+// maxRefsPerBlob bounds how many referencing mods we track per blob. Adding a
+// reference costs the publisher proof-of-work (the relay gates mod events), so
+// this is really a backstop against a pathological/adversarial case rather than
+// an expected limit — a blob legitimately shared by 50+ distinct mods is not a
+// thing. Past the cap we stop appending; the blob just stays "claimed".
+const maxRefsPerBlob = 50
+
 type blobRefs struct {
 	mu   sync.RWMutex
 	host string              // host of the node's public URL; only URLs on it count
@@ -70,6 +77,9 @@ func (b *blobRefs) note(evt *nostr.Event) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for _, h := range hashes {
+		if len(b.m[h]) >= maxRefsPerBlob {
+			continue // already at the cap — it's claimed, that's all we need
+		}
 		if !hasCoord(b.m[h], ref.Coord) {
 			b.m[h] = append(b.m[h], ref)
 		}

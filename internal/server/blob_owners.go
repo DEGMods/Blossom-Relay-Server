@@ -35,13 +35,17 @@ func (b *blobOwners) get(hash string) string {
 	return b.m[hash]
 }
 
-// set records the uploader for a hash, persisting only when it actually changed.
+// set records the uploader for a hash — first writer wins. The store is
+// content-addressed, so a "re-upload" of the same bytes is the same object; the
+// first uploader is the one who actually introduced it, and later identical
+// uploads (rare — clients HEAD-check and skip) must not erase that credit, or a
+// blob could silently vanish from the original uploader's "my uploads" view.
 func (b *blobOwners) set(hash, pubkey string) {
 	if hash == "" || pubkey == "" {
 		return
 	}
 	b.mu.Lock()
-	if b.m[hash] == pubkey {
+	if b.m[hash] != "" { // already attributed — keep the original uploader
 		b.mu.Unlock()
 		return
 	}

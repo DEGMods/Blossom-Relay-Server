@@ -15,12 +15,13 @@ func TestBlobOwnersRoundTrip(t *testing.T) {
 
 	o.set("hash1", "pk1")
 	o.set("hash2", "pk2")
-	o.set("", "pkX")     // ignored — no hash
-	o.set("hash3", "")   // ignored — no pubkey
+	o.set("", "pkX")      // ignored — no hash
+	o.set("hash3", "")    // ignored — no pubkey
 	o.set("hash1", "pk1") // no-op (unchanged)
+	o.set("hash1", "pk9") // ignored — first uploader wins, never overwritten
 
 	if got := o.get("hash1"); got != "pk1" {
-		t.Fatalf("hash1 = %q, want pk1", got)
+		t.Fatalf("hash1 = %q, want pk1 (first-writer-wins)", got)
 	}
 	if got := o.get("hash3"); got != "" {
 		t.Fatalf("hash3 should be absent, got %q", got)

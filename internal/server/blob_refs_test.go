@@ -86,6 +86,37 @@ func TestNoteAndRefsFor(t *testing.T) {
 	}
 }
 
+func TestRefsCappedPerBlob(t *testing.T) {
+	b := newBlobRefs("https://brs.degmods.com")
+	// Far more distinct mods reference the same blob than the cap allows.
+	for i := 0; i < maxRefsPerBlob+25; i++ {
+		b.note(&nostr.Event{
+			Kind: currentModKind,
+			Tags: nostr.Tags{
+				{"d", "mod-" + itoa(i)},
+				{"download", `{"file":"https://brs.degmods.com/` + refHashA + `.zip"}`},
+			},
+		})
+	}
+	if got := len(b.refsFor(refHashA)); got != maxRefsPerBlob {
+		t.Fatalf("refsFor(A) = %d, want capped at %d", got, maxRefsPerBlob)
+	}
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var buf [20]byte
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(buf[i:])
+}
+
 func currentModKindCoord(d, pk string) string {
 	return coordOf(&nostr.Event{Kind: currentModKind, PubKey: pk, Tags: nostr.Tags{{"d", d}}})
 }
