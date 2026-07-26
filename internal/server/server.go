@@ -46,6 +46,7 @@ type Server struct {
 	allowedUploadTypes []string // accepted extensions (magic-detected); "*" = any
 	minEventPoW        int
 	acceptAllKinds     bool // fork switch: no kind allowlist (see config.Relay)
+	maxConcurrent      int  // global simultaneous uploads (display-only mirror of the limiter's cap)
 	limiter            *uploadLimiter
 	block              *blocklist
 	white              *whitelist
@@ -122,6 +123,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		allowedUploadTypes: cfg.Upload.AllowedTypes,
 		minEventPoW:        cfg.Relay.MinEventPoW,
 		acceptAllKinds:     cfg.Relay.AcceptAllKinds,
+		maxConcurrent:      cfg.Upload.MaxConcurrent,
 		limiter:            newUploadLimiter(cfg.Upload.MaxConcurrent),
 		block:              loadBlocklist(filepath.Join(cfg.DataDir, "blocklist.json")),
 		white:              loadWhitelist(filepath.Join(cfg.DataDir, "whitelist.json")),
@@ -191,6 +193,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 	}
 	// Admin API (NIP-98 auth, admin key). Blob deletion via DELETE /<hash>.
 	mux.HandleFunc("DELETE /{hash}", s.handleDelete)
+	mux.HandleFunc("GET /admin/config", s.handleAdminConfig)
 	mux.HandleFunc("GET /admin/events", s.handleAdminEvents)
 	mux.HandleFunc("GET /admin/blobs", s.handleAdminBlobs)
 	mux.HandleFunc("GET /admin/blob/{hash}", s.handleAdminBlobDownload) // gate-free admin download

@@ -65,6 +65,34 @@ export interface EventsQuery {
   limit?: number
   search?: string
 }
+
+/** Read-only snapshot of the node's live config (Relay → Settings). No secrets. */
+export interface RelayConfig {
+  relay: {
+    accept_all_kinds: boolean
+    accepted_kinds: { kind: number; label: string }[]
+    min_event_pow: number
+    legacy_cutoff: number
+    admin_configured: boolean
+  }
+  download_gate: {
+    pow_difficulty: number
+    challenge_ttl_sec: number
+    ad_gate: boolean
+    ad_min_ms: number
+    trusted_ip_header: string
+  }
+  upload: {
+    max_concurrent: number
+    min_pow: number
+    min_upload_rate_kbps: number
+    idle_timeout_sec: number
+    min_free_disk_mb: number
+    allowed_types: string[]
+    size_cap_mb: number
+    whitelisted_cap_mb: number
+  }
+}
 export interface WhitelistEntry {
   pubkey: string
   note?: string
@@ -136,6 +164,13 @@ export async function downloadBlob(hash: string, ext: string): Promise<void> {
   a.click()
   a.remove()
   URL.revokeObjectURL(objUrl)
+}
+
+/** Read-only node config snapshot for the Relay → Settings view. */
+export async function getRelayConfig(): Promise<RelayConfig> {
+  const res = await adminFetch('/admin/config', 'GET')
+  if (!res.ok) throw new Error(await reason(res))
+  return res.json()
 }
 
 /** Query stored relay events by the given filters (all optional). Read-only. */

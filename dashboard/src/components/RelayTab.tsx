@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import {
   Loader2, Search, AlertTriangle, Plus, X, ChevronDown, ChevronRight,
-  Copy, Check, Filter as FilterIcon,
+  Copy, Check, Filter as FilterIcon, List, SlidersHorizontal, Info,
 } from 'lucide-react'
-import { queryEvents, type EventsPage, type RelayEvent } from '../api'
+import { queryEvents, getRelayConfig, type EventsPage, type RelayEvent, type RelayConfig } from '../api'
 import { npubEncode, naddrEncode } from '../nostr'
 import { cn, truncateMiddle, formatDate } from '../lib'
 
@@ -18,13 +18,44 @@ const KIND_LABELS: Record<number, string> = {
   30078: 'Ad inventory',
 }
 const KIND_OPTIONS = Object.entries(KIND_LABELS).map(([k, label]) => ({ kind: Number(k), label }))
+const kindName = (k: number) => KIND_LABELS[k] ?? `kind ${k}`
 
-interface TagFilter { name: string; value: string }
+type Sub = 'general' | 'settings'
 
 export function RelayTab() {
+  const [sub, setSub] = useState<Sub>('general')
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-1">
+        <SubTab active={sub === 'general'} onClick={() => setSub('general')} icon={List} label="General" />
+        <SubTab active={sub === 'settings'} onClick={() => setSub('settings')} icon={SlidersHorizontal} label="Settings" />
+      </div>
+      {sub === 'general' ? <RelayBrowse /> : <RelaySettings />}
+    </div>
+  )
+}
+
+function SubTab({ active, onClick, icon: Icon, label }: { active: boolean; onClick: () => void; icon: typeof List; label: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors',
+        active ? 'bg-secondary text-white' : 'text-muted-foreground hover:text-neutral-300',
+      )}
+    >
+      <Icon size={14} /> {label}
+    </button>
+  )
+}
+
+// ─── General: event browser ─────────────────────────────────────────
+
+function RelayBrowse() {
   const [kinds, setKinds] = useState<number[]>([])
+  const [customKind, setCustomKind] = useState('')
   const [author, setAuthor] = useState('')
-  const [tags, setTags] = useState<TagFilter[]>([{ name: '', value: '' }])
+  const [tags, setTags] = useState<{ name: string; value: string }[]>([{ name: '', value: '' }])
   const [since, setSince] = useState('')
   const [until, setUntil] = useState('')
   const [limit, setLimit] = useState('100')
@@ -62,7 +93,6 @@ export function RelayTab() {
     }
   }
 
-  // Initial load with defaults.
   useEffect(() => {
     void run()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -70,6 +100,7 @@ export function RelayTab() {
 
   const reset = () => {
     setKinds([])
+    setCustomKind('')
     setAuthor('')
     setTags([{ name: '', value: '' }])
     setSince('')
@@ -80,14 +111,18 @@ export function RelayTab() {
 
   const toggleKind = (k: number) =>
     setKinds((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]))
-  const setTag = (i: number, field: keyof TagFilter, v: string) =>
+  const addCustomKind = () => {
+    const k = parseInt(customKind, 10)
+    if (Number.isInteger(k) && k >= 0 && !kinds.includes(k)) setKinds((prev) => [...prev, k])
+    setCustomKind('')
+  }
+  const setTag = (i: number, field: 'name' | 'value', v: string) =>
     setTags((prev) => prev.map((t, j) => (j === i ? { ...t, [field]: v } : t)))
   const addTag = () => setTags((prev) => [...prev, { name: '', value: '' }])
   const removeTag = (i: number) =>
     setTags((prev) => (prev.length === 1 ? [{ name: '', value: '' }] : prev.filter((_, j) => j !== i)))
 
-  const inputCls =
-    'rounded-lg border border-border bg-[#212121] px-3 py-2 text-sm text-white placeholder:text-muted-foreground focus:border-[#404040] focus:outline-none'
+  const customKinds = kinds.filter((k) => !(k in KIND_LABELS))
 
   return (
     <div className="space-y-4">
@@ -111,16 +146,40 @@ export function RelayTab() {
             <button
               key={kind}
               onClick={() => toggleKind(kind)}
-              className={cn(
-                'rounded-md border px-2 py-1 text-xs font-medium transition-colors',
-                kinds.includes(kind)
-                  ? 'border-primary/40 bg-primary/10 text-primary'
-                  : 'border-border text-neutral-400 hover:border-[#404040]',
-              )}
+              className={cn('rounded-md border px-2 py-1 text-xs font-medium transition-colors', chipCls(kinds.includes(kind)))}
             >
               {label}
             </button>
           ))}
+          {customKinds.map((k) => (
+            <button
+              key={k}
+              onClick={() => toggleKind(k)}
+              className={cn('inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium', chipCls(true))}
+              title="Custom kind — click to remove"
+            >
+              kind {k} <X className="h-3 w-3" />
+            </button>
+          ))}
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              min={0}
+              value={customKind}
+              onChange={(e) => setCustomKind(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addCustomKind())}
+              placeholder="custom #"
+              className={cn(inputCls, 'w-24 py-1')}
+            />
+            <button
+              onClick={addCustomKind}
+              disabled={!customKind.trim()}
+              className="rounded-md border border-border p-1 text-neutral-400 hover:border-[#404040] hover:text-neutral-200 disabled:opacity-40"
+              title="Add custom kind"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Author + limit */}
@@ -133,13 +192,7 @@ export function RelayTab() {
           />
           <div className="flex items-center gap-2">
             <label className="text-xs text-muted-foreground">Limit</label>
-            <input
-              type="number"
-              min={1}
-              value={limit}
-              onChange={(e) => setLimit(e.target.value)}
-              className={cn(inputCls, 'w-24 text-right')}
-            />
+            <input type="number" min={1} value={limit} onChange={(e) => setLimit(e.target.value)} className={cn(inputCls, 'w-24 text-right')} />
           </div>
         </div>
 
@@ -159,12 +212,7 @@ export function RelayTab() {
         <div className="space-y-2">
           {tags.map((t, i) => (
             <div key={i} className="flex items-center gap-2">
-              <input
-                value={t.name}
-                onChange={(e) => setTag(i, 'name', e.target.value)}
-                placeholder="tag (e.g. t, g, d)"
-                className={cn(inputCls, 'w-40')}
-              />
+              <input value={t.name} onChange={(e) => setTag(i, 'name', e.target.value)} placeholder="tag (e.g. t, g, d)" className={cn(inputCls, 'w-40')} />
               <input
                 value={t.value}
                 onChange={(e) => setTag(i, 'value', e.target.value)}
@@ -172,11 +220,7 @@ export function RelayTab() {
                 placeholder="value"
                 className={cn(inputCls, 'flex-1')}
               />
-              <button
-                onClick={() => removeTag(i)}
-                title="Remove tag filter"
-                className="rounded-md p-2 text-neutral-500 hover:bg-secondary hover:text-white"
-              >
+              <button onClick={() => removeTag(i)} title="Remove tag filter" className="rounded-md p-2 text-neutral-500 hover:bg-secondary hover:text-white">
                 <X className="h-4 w-4" />
               </button>
             </div>
@@ -205,9 +249,7 @@ export function RelayTab() {
       {/* Results */}
       <div className="rounded-lg border border-border bg-card">
         <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-          <h3 className="text-sm font-semibold text-neutral-200">
-            Events{data ? ` (${data.count})` : ''}
-          </h3>
+          <h3 className="text-sm font-semibold text-neutral-200">Events{data ? ` (${data.count})` : ''}</h3>
           {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
         </div>
 
@@ -218,9 +260,7 @@ export function RelayTab() {
         ) : data && data.events.length === 0 && !loading ? (
           <div className="px-4 py-10 text-center text-sm text-muted-foreground">No events match.</div>
         ) : (
-          <ul className="divide-y divide-border/60">
-            {data?.events.map((e) => <EventRow key={e.id} evt={e} />)}
-          </ul>
+          <ul className="divide-y divide-border/60">{data?.events.map((e) => <EventRow key={e.id} evt={e} />)}</ul>
         )}
 
         {data?.truncated && (
@@ -233,9 +273,13 @@ export function RelayTab() {
   )
 }
 
+const inputCls =
+  'rounded-lg border border-border bg-[#212121] px-3 py-2 text-sm text-white placeholder:text-muted-foreground focus:border-[#404040] focus:outline-none'
+const chipCls = (active: boolean) =>
+  active ? 'border-primary/40 bg-primary/10 text-primary' : 'border-border text-neutral-400 hover:border-[#404040]'
+
 function EventRow({ evt }: { evt: RelayEvent }) {
   const [open, setOpen] = useState(false)
-  const kindLabel = KIND_LABELS[evt.kind] ?? `kind ${evt.kind}`
   const dTag = evt.tags.find((t) => t[0] === 'd')?.[1]
   const title = evt.tags.find((t) => t[0] === 'title')?.[1]
   const naddr = dTag ? naddrEncode(`${evt.kind}:${evt.pubkey}:${dTag}`) : ''
@@ -247,9 +291,7 @@ function EventRow({ evt }: { evt: RelayEvent }) {
         <button onClick={() => setOpen((v) => !v)} className="shrink-0 text-neutral-500 hover:text-white">
           {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
         </button>
-        <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-neutral-300">
-          {kindLabel}
-        </span>
+        <span className="shrink-0 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-neutral-300">{kindName(evt.kind)}</span>
         <span className="min-w-0 flex-1 truncate text-sm text-neutral-300" title={preview}>
           {preview || <span className="text-neutral-600">(no title)</span>}
         </span>
@@ -290,5 +332,89 @@ function CopyBtn({ label, value }: { label: string; value: string }) {
       {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
       {label}
     </button>
+  )
+}
+
+// ─── Settings: read-only config snapshot ────────────────────────────
+
+function RelaySettings() {
+  const [cfg, setCfg] = useState<RelayConfig | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    getRelayConfig()
+      .then(setCfg)
+      .catch((e) => setError(e instanceof Error ? e.message : 'Failed to load config'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading) return <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+  if (error) return <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-8 text-sm text-destructive"><AlertTriangle className="h-4 w-4" /> {error}</div>
+  if (!cfg) return null
+
+  const onOff = (b: boolean) => (b ? 'On' : 'Off')
+  const bits = (n: number) => (n > 0 ? `${n} bits` : 'Off (0)')
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-neutral-500" /> Read-only — the node’s live configuration, set in its config file. (Upload size caps are editable under the Settings tab.)
+      </div>
+
+      <Section title="Relay policy">
+        <Row label="Kind allowlist" value={cfg.relay.accept_all_kinds ? 'Disabled — accepts any kind (fork mode)' : 'Mod-scoped'} />
+        {!cfg.relay.accept_all_kinds && (
+          <Row
+            label="Accepted kinds"
+            value={cfg.relay.accepted_kinds.map((k) => `${k.label} (${k.kind})`).join(', ')}
+          />
+        )}
+        <Row label="Min event PoW" value={bits(cfg.relay.min_event_pow)} hint="NIP-13 bits required on mod events" />
+        <Row label="Legacy mods accepted before" value={formatDate(cfg.relay.legacy_cutoff)} hint="Kind 30402 (GameMod), PoW-exempt, until this cutoff" />
+        <Row label="Admin key configured" value={cfg.relay.admin_configured ? 'Yes' : 'No'} />
+      </Section>
+
+      <Section title="Download gate">
+        <Row label="Proof-of-work" value={bits(cfg.download_gate.pow_difficulty)} hint="BUD-POW leading-zero bits on downloads" />
+        <Row label="Ad gate" value={onOff(cfg.download_gate.ad_gate)} hint="BUD-Ads: require an ad view before download" />
+        <Row label="Min ad view" value={`${cfg.download_gate.ad_min_ms} ms`} />
+        <Row label="Challenge TTL" value={`${cfg.download_gate.challenge_ttl_sec}s`} />
+        <Row label="Trusted IP header" value={cfg.download_gate.trusted_ip_header || 'socket IP (none set)'} />
+      </Section>
+
+      <Section title="Upload & rate limits">
+        <Row label="Max concurrent uploads" value={String(cfg.upload.max_concurrent)} />
+        <Row label="Min upload speed" value={cfg.upload.min_upload_rate_kbps > 0 ? `${cfg.upload.min_upload_rate_kbps} KB/s` : 'Off'} hint="Uploads below this over a 5s window are aborted" />
+        <Row label="Idle timeout" value={`${cfg.upload.idle_timeout_sec}s`} hint="Abort an upload after this long with no data" />
+        <Row label="Upload auth PoW" value={bits(cfg.upload.min_pow)} hint="NIP-13 bits on the kind-24242 upload auth" />
+        <Row label="Min free disk" value={`${cfg.upload.min_free_disk_mb.toLocaleString()} MB`} hint="Refuse uploads below this free space" />
+        <Row label="Allowed types" value={cfg.upload.allowed_types.map((t) => (t === '*' ? 'any' : `.${t}`)).join(', ')} />
+        <Row label="Size cap" value={`${cfg.upload.size_cap_mb} MB`} hint={`Whitelisted: ${cfg.upload.whitelisted_cap_mb} MB`} />
+      </Section>
+    </div>
+  )
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-lg border border-border bg-card">
+      <div className="border-b border-border px-4 py-2.5">
+        <h3 className="text-sm font-semibold text-neutral-200">{title}</h3>
+      </div>
+      <div className="divide-y divide-border/60">{children}</div>
+    </div>
+  )
+}
+
+function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 px-4 py-2.5">
+      <div className="min-w-0">
+        <div className="text-sm text-neutral-300">{label}</div>
+        {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
+      </div>
+      <div className="shrink-0 text-right text-sm font-medium text-neutral-100">{value}</div>
+    </div>
   )
 }
