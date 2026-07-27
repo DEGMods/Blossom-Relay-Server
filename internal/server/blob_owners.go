@@ -111,6 +111,35 @@ func (b *blobOwners) add(hash, pubkey string) {
 	b.save()
 }
 
+// removeOne drops a single uploader from a hash's set (an uploader retracting
+// their own upload). Returns whether the pubkey was present, and whether the set
+// is now empty. Persists on change.
+func (b *blobOwners) removeOne(hash, pubkey string) (removed, nowEmpty bool) {
+	b.mu.Lock()
+	list := b.m[hash]
+	idx := -1
+	for i, pk := range list {
+		if pk == pubkey {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		b.mu.Unlock()
+		return false, len(list) == 0
+	}
+	list = append(list[:idx], list[idx+1:]...)
+	if len(list) == 0 {
+		delete(b.m, hash)
+	} else {
+		b.m[hash] = list
+	}
+	nowEmpty = len(list) == 0
+	b.mu.Unlock()
+	b.save()
+	return true, nowEmpty
+}
+
 // remove drops a hash's entire entry (e.g. after the blob is deleted), so the map
 // doesn't accumulate entries for blobs that no longer exist.
 func (b *blobOwners) remove(hash string) {

@@ -56,6 +56,7 @@ type Server struct {
 	refs               *blobRefs   // hash -> mods that reference it (in-memory, dashboard labelling)
 	caps               *uploadCaps // per-upload size caps, runtime-adjustable (persistent)
 	blacklist          *blacklistedHashes // blob hashes barred from upload/download (persistent)
+	quarantine         *quarantine        // blobs withheld from download (reversible; persistent)
 	adminPubkey        string      // hex; the only key allowed to delete blobs (moderation)
 
 	// admin blob-listing cache (avoids a full storage scan on every page click)
@@ -138,6 +139,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 			int64(cfg.Upload.MaxSizeMB)*5, // whitelisted default (preserves the old 5× behaviour)
 		),
 		blacklist:   loadBlacklist(filepath.Join(cfg.DataDir, "blacklist.json")),
+		quarantine:  loadQuarantine(filepath.Join(cfg.DataDir, "quarantine.json")),
 		adminPubkey: resolvePubkey(cfg.Relay.AdminNpub),
 
 		powDifficulty:   cfg.Download.PoWDifficulty,
@@ -203,6 +205,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 	mux.HandleFunc("GET /admin/blacklist", s.handleBlacklistList)
 	mux.HandleFunc("POST /admin/blacklist", s.handleBlacklistAdd)
 	mux.HandleFunc("DELETE /admin/blacklist", s.handleBlacklistRemove)
+	mux.HandleFunc("DELETE /admin/quarantine", s.handleQuarantineRelease)
 	mux.HandleFunc("GET /admin/whitelist", s.handleAdminWhitelistList)
 	mux.HandleFunc("POST /admin/whitelist", s.handleAdminWhitelistAdd)
 	mux.HandleFunc("DELETE /admin/whitelist", s.handleAdminWhitelistRemove)

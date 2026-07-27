@@ -168,9 +168,11 @@ func (s *Server) gate(next http.Handler) http.Handler {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
-		// Blacklisted content is gone here regardless of the gate: retrieval 404s
-		// (as if deleted), and re-upload is rejected in the upload handler.
-		if (r.Method == http.MethodGet || r.Method == http.MethodHead) && s.blacklist.has(hash) {
+		// Blacklisted (permanent ban) or quarantined (reversible — last uploader
+		// retracted it) content is withheld regardless of the gate: retrieval 404s as
+		// if deleted. Blacklist re-upload is rejected; a quarantine is lifted by one.
+		if (r.Method == http.MethodGet || r.Method == http.MethodHead) &&
+			(s.blacklist.has(hash) || s.quarantine.has(hash)) {
 			httpErr(w, http.StatusNotFound, "not found")
 			return
 		}

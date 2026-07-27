@@ -162,9 +162,10 @@ func (s *Server) handleAdminBlobs(w http.ResponseWriter, r *http.Request) {
 		Ext       string   `json:"ext"`
 		Size      int64    `json:"size"`
 		URL       string   `json:"url"`
-		Added     int64    `json:"added"`                // unix seconds; 0 if unknown
-		Uploaders []string `json:"uploaders,omitempty"`  // pubkeys, original first; empty if untracked (legacy)
-		Refs      []modRef `json:"refs,omitempty"`       // mods that reference this blob; empty = unclaimed
+		Added       int64    `json:"added"`                // unix seconds; 0 if unknown
+		Uploaders   []string `json:"uploaders,omitempty"`  // pubkeys, original first; empty if untracked (legacy)
+		Refs        []modRef `json:"refs,omitempty"`       // mods that reference this blob; empty = unclaimed
+		Quarantined bool     `json:"quarantined,omitempty"` // withheld from download (last uploader retracted it)
 	}
 	items := make([]blobDTO, 0, end-start)
 	for _, b := range filtered[start:end] {
@@ -175,7 +176,7 @@ func (s *Server) handleAdminBlobs(w http.ResponseWriter, r *http.Request) {
 		items = append(items, blobDTO{
 			Hash: b.Hash, Ext: b.Ext, Size: b.Size,
 			URL: s.publicURL + "/" + b.Key, Added: added, Uploaders: s.owners.list(b.Hash),
-			Refs: s.refs.refsFor(b.Hash),
+			Refs: s.refs.refsFor(b.Hash), Quarantined: s.quarantine.has(b.Hash),
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -286,6 +287,26 @@ func (s *Server) handleBlacklistAdd(w http.ResponseWriter, r *http.Request) {
 	// Purge the stored object too (best-effort — the entry is what enforces the ban).
 	_ = s.storage.Delete(r.Context(), hash, "")
 	s.owners.remove(hash)
+	s.invalidateBlobCache()
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// handleQuarantineRelease lifts a blob's quarantine, making it downloadable again
+// (the bytes were never removed). Admin-only.
+func (s *Server) handleQuarantineRelease(w http.ResponseWriter, r *http.Request) {
+	setAdminCORS(w)
+	if err := s.verifyAdmin(r); err != nil {
+		httpErr(w, http.StatusUnauthorized, err.Error())
+		return
+	}
+	var body struct {
+		Hash string `json:"hash"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		httpErr(w, http.StatusBadRequest, "invalid JSON")
+		return
+	}
+	s.quarantine.remove(strings.ToLower(strings.TrimSpace(body.Hash)))
 	s.invalidateBlobCache()
 	w.WriteHeader(http.StatusNoContent)
 }

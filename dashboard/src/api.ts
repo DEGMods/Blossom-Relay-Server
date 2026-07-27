@@ -26,6 +26,8 @@ export interface AdminBlob {
   uploaders?: string[]
   /** Mods that reference this blob. Empty/absent = no stored mod references it. */
   refs?: ModRef[]
+  /** Withheld from download — the last uploader retracted it. Reversible. */
+  quarantined?: boolean
 }
 export interface BlobsPage {
   total: number
@@ -219,6 +221,12 @@ export async function addBlacklist(hash: string, note?: string): Promise<void> {
 /** Lift a blacklist entry (does not restore any bytes). */
 export async function removeBlacklist(hash: string): Promise<void> {
   const res = await adminFetch('/admin/blacklist', 'DELETE', { hash })
+  if (!res.ok) throw new Error(await reason(res))
+}
+
+/** Lift a blob's quarantine, making it downloadable again (bytes were kept). */
+export async function releaseQuarantine(hash: string): Promise<void> {
+  const res = await adminFetch('/admin/quarantine', 'DELETE', { hash })
   if (!res.ok) throw new Error(await reason(res))
 }
 

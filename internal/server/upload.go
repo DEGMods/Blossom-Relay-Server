@@ -364,6 +364,8 @@ func (s *Server) handleUploadPut(w http.ResponseWriter, r *http.Request) {
 	// Remember who uploaded this, for the admin dashboard and later blob↔mod
 	// reconciliation. Best-effort: a failure here doesn't fail the upload.
 	s.owners.add(sum, evt.PubKey)
+	// A re-upload revives a quarantined blob (someone wants it again).
+	s.quarantine.remove(sum)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"url":      s.publicURL + "/" + sum + "." + ext,

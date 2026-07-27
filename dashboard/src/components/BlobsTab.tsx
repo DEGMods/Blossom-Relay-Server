@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import {
   Loader2, Search, Trash2, Download, Copy, Check, ChevronLeft, ChevronRight,
-  ArrowUp, ArrowDown, AlertTriangle,
+  ArrowUp, ArrowDown, AlertTriangle, X, Undo2, Users,
 } from 'lucide-react'
-import { listBlobs, deleteBlob, downloadBlob, addBlacklist, formatBytes, type BlobsPage, type BlobSort, type ModRef } from '../api'
+import {
+  listBlobs, deleteBlob, downloadBlob, addBlacklist, releaseQuarantine, formatBytes,
+  type BlobsPage, type BlobSort, type ModRef,
+} from '../api'
 import { npubEncode, naddrEncode } from '../nostr'
 import { cn, truncateMiddle, formatDate } from '../lib'
 import { toast } from '../toast'
@@ -127,10 +130,11 @@ export function BlobsTab() {
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-neutral-300">{formatBytes(b.size)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-neutral-400">{formatDate(b.added)}</td>
-                    <td className="px-3 py-2"><StateCell refs={b.refs} /></td>
+                    <td className="px-3 py-2"><StateCell refs={b.refs} quarantined={b.quarantined} /></td>
                     <td className="px-3 py-2 text-neutral-400"><ModCell refs={b.refs} /></td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-1">
+                        {b.quarantined && <ReleaseButton hash={b.hash} onReleased={load} />}
                         <DownloadButton hash={b.hash} ext={b.ext} />
                         <button
                           onClick={() => setConfirm(b.hash)}
@@ -221,25 +225,89 @@ function HashCell({ hash }: { hash: string }) {
 }
 
 /**
- * The blob's uploaders. Shows the original (first) uploader as a copyable npub;
- * "+N" marks additional people who uploaded the same content, all listed on hover.
+ * The blob's uploaders. Shows the original (first) uploader as a copyable npub; a
+ * clickable "+N" opens a modal listing every uploader, each individually copyable.
  */
 function UploaderCell({ uploaders }: { uploaders?: string[] }) {
+  const [open, setOpen] = useState(false)
   if (!uploaders || uploaders.length === 0) {
     return <span className="text-neutral-600" title="Uploaded before uploaders were tracked">—</span>
   }
   const npub = npubEncode(uploaders[0])
   const rest = uploaders.length - 1
-  const tip = uploaders.map((u) => npubEncode(u)).join('\n')
   return (
     <span className="inline-flex items-center gap-1">
       <Copyable full={npub} display={truncateMiddle(npub, 10, 6)} />
       {rest > 0 && (
-        <span className="shrink-0 text-neutral-600" title={tip}>
+        <button
+          onClick={() => setOpen(true)}
+          title="View all uploaders"
+          className="shrink-0 rounded px-1 text-neutral-500 hover:bg-secondary hover:text-neutral-200"
+        >
           +{rest}
-        </span>
+        </button>
       )}
+      {open && <UploadersModal uploaders={uploaders} onClose={() => setOpen(false)} />}
     </span>
+  )
+}
+
+function UploadersModal({ uploaders, onClose }: { uploaders: string[]; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
+      <div className="w-full max-w-md space-y-3 rounded-xl border border-border bg-card p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="inline-flex items-center gap-2 text-sm font-semibold text-neutral-100">
+            <Users className="h-4 w-4 text-neutral-400" /> Uploaders ({uploaders.length})
+          </h3>
+          <button onClick={onClose} className="rounded-md p-1 text-neutral-500 hover:bg-secondary hover:text-white">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Everyone who uploaded these exact bytes — the first is the original uploader.
+        </p>
+        <ul className="max-h-80 space-y-1 overflow-auto">
+          {uploaders.map((u, i) => {
+            const npub = npubEncode(u)
+            return (
+              <li key={u} className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-[#1a1a1a] px-3 py-2">
+                <span className="min-w-0 font-mono text-xs text-neutral-300">
+                  {i === 0 && <span className="mr-1 rounded bg-secondary px-1 text-[10px] text-neutral-400">original</span>}
+                  <span className="align-middle" title={npub}>{truncateMiddle(npub, 14, 10)}</span>
+                </span>
+                <Copyable full={npub} display="Copy" className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-neutral-400 hover:text-neutral-200" />
+              </li>
+            )
+          })}
+        </ul>
+      </div>
+    </div>
+  )
+}
+
+function ReleaseButton({ hash, onReleased }: { hash: string; onReleased: () => void }) {
+  const [busy, setBusy] = useState(false)
+  const go = async () => {
+    setBusy(true)
+    try {
+      await releaseQuarantine(hash)
+      toast('Released from quarantine')
+      onReleased()
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Release failed', 'error')
+      setBusy(false)
+    }
+  }
+  return (
+    <button
+      onClick={go}
+      disabled={busy}
+      title="Release from quarantine (make downloadable again)"
+      className="rounded-md p-1.5 text-neutral-500 transition-colors hover:bg-success/15 hover:text-success disabled:opacity-60"
+    >
+      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
+    </button>
   )
 }
 
@@ -248,7 +316,17 @@ function UploaderCell({ uploaders }: { uploaders?: string[] }) {
  * orphaned — the mod may live on another relay — so the tooltip says "verify before
  * removing". Labelling only; nothing here deletes or gates anything.
  */
-function StateCell({ refs }: { refs?: ModRef[] }) {
+function StateCell({ refs, quarantined }: { refs?: ModRef[]; quarantined?: boolean }) {
+  if (quarantined) {
+    return (
+      <span
+        className="rounded-full bg-warning/15 px-2 py-0.5 text-[10px] font-medium text-warning"
+        title="Withheld from download — the last uploader retracted it. Reversible: a re-upload or Release restores it."
+      >
+        Quarantined
+      </span>
+    )
+  }
   if (refs && refs.length > 0) {
     return (
       <span
