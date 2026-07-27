@@ -22,8 +22,8 @@ export interface AdminBlob {
   size: number
   url: string
   added: number
-  /** Uploader pubkey (hex). Empty for blobs uploaded before this was tracked. */
-  pubkey?: string
+  /** Uploader pubkeys (hex), original first. Empty for blobs uploaded before tracking. */
+  uploaders?: string[]
   /** Mods that reference this blob. Empty/absent = no stored mod references it. */
   refs?: ModRef[]
 }

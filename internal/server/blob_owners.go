@@ -6,55 +6,112 @@ import (
 	"sync"
 )
 
-// blobOwners maps a blob hash → the pubkey that uploaded it (taken from the
-// kind-24242 upload authorization). The storage layer is content-addressed and
-// keeps no per-object uploader, so this is recorded alongside it here.
+// maxUploadersPerBlob bounds how many uploaders we track per blob. Content is
+// deduplicated, so the same bytes arriving from several people is normal (reposts,
+// mirrors); we keep them as an ordered set (first = the original uploader). The
+// cap is a backstop against pathological growth — uploading costs bytes + PoW, so
+// reaching it in practice means abuse.
+const maxUploadersPerBlob = 50
+
+// blobOwners maps a blob hash → the set of pubkeys that uploaded it, in order
+// (first = the original uploader). The storage layer is content-addressed and
+// keeps no per-object uploader, so this is recorded alongside it here. Tracking
+// every uploader (not just the first) is what lets a future "my uploads" view show
+// a blob to everyone who added it, and underpins reference-counted removal — a
+// person removing their upload drops only their pubkey; the blob stays while
+// anyone else still claims it.
 //
-// Persisted as JSON, same shape as the other aux stores (whitelist, deletions,
-// …). Blobs uploaded before this existed have no entry — callers treat a missing
-// owner as "unknown" rather than an error. Used by the admin dashboard now, and
-// available for reconciling blobs against the mods that reference them later.
+// Persisted as JSON. Legacy blobs (uploaded before tracking) have no entry —
+// callers treat that as "unknown", never an error. The loader tolerates the
+// earlier single-string shape ({"hash":"pk"}) and upgrades it to a list on the
+// next save.
 type blobOwners struct {
 	mu     sync.RWMutex
 	saveMu sync.Mutex
 	path   string
-	m      map[string]string // hash (hex) -> uploader pubkey (hex)
+	m      map[string][]string // hash (hex) -> uploader pubkeys (hex), original first
 }
 
 func loadBlobOwners(path string) *blobOwners {
-	b := &blobOwners{path: path, m: map[string]string{}}
+	b := &blobOwners{path: path, m: map[string][]string{}}
 	if data, err := os.ReadFile(path); err == nil {
-		_ = json.Unmarshal(data, &b.m)
+		b.m = parseOwners(data)
 	}
 	return b
 }
 
-func (b *blobOwners) get(hash string) string {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-	return b.m[hash]
+// parseOwners reads the owners map, accepting both the current list form
+// ({"hash":["pk",...]}) and the earlier single-string form ({"hash":"pk"}), so an
+// existing blob_owners.json upgrades seamlessly.
+func parseOwners(data []byte) map[string][]string {
+	out := map[string][]string{}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return out
+	}
+	for h, v := range raw {
+		var list []string
+		if err := json.Unmarshal(v, &list); err == nil {
+			if len(list) > 0 {
+				out[h] = list
+			}
+			continue
+		}
+		var one string
+		if err := json.Unmarshal(v, &one); err == nil && one != "" {
+			out[h] = []string{one}
+		}
+	}
+	return out
 }
 
-// set records the uploader for a hash — first writer wins. The store is
-// content-addressed, so a "re-upload" of the same bytes is the same object; the
-// first uploader is the one who actually introduced it, and later identical
-// uploads (rare — clients HEAD-check and skip) must not erase that credit, or a
-// blob could silently vanish from the original uploader's "my uploads" view.
-func (b *blobOwners) set(hash, pubkey string) {
+// first returns the original uploader (or "" if none/legacy).
+func (b *blobOwners) first(hash string) string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	if list := b.m[hash]; len(list) > 0 {
+		return list[0]
+	}
+	return ""
+}
+
+// list returns a copy of the uploaders for a hash (nil if none), original first.
+func (b *blobOwners) list(hash string) []string {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	src := b.m[hash]
+	if len(src) == 0 {
+		return nil
+	}
+	out := make([]string, len(src))
+	copy(out, src)
+	return out
+}
+
+// add records an uploader for a hash. The original (first) uploader is preserved;
+// a repeat uploader is appended once (deduped), up to the cap. Persists on change.
+func (b *blobOwners) add(hash, pubkey string) {
 	if hash == "" || pubkey == "" {
 		return
 	}
 	b.mu.Lock()
-	if b.m[hash] != "" { // already attributed — keep the original uploader
+	list := b.m[hash]
+	for _, pk := range list {
+		if pk == pubkey {
+			b.mu.Unlock()
+			return // already recorded
+		}
+	}
+	if len(list) >= maxUploadersPerBlob {
 		b.mu.Unlock()
 		return
 	}
-	b.m[hash] = pubkey
+	b.m[hash] = append(list, pubkey)
 	b.mu.Unlock()
 	b.save()
 }
 
-// remove drops a hash's owner (e.g. after the blob is deleted), so the map
+// remove drops a hash's entire entry (e.g. after the blob is deleted), so the map
 // doesn't accumulate entries for blobs that no longer exist.
 func (b *blobOwners) remove(hash string) {
 	b.mu.Lock()
@@ -68,8 +125,7 @@ func (b *blobOwners) remove(hash string) {
 }
 
 // save snapshots under the read lock, then writes under a dedicated mutex so
-// concurrent uploads can't interleave a half-written file. Compact JSON — this
-// map can grow to one entry per blob.
+// concurrent uploads can't interleave a half-written file.
 func (b *blobOwners) save() {
 	b.mu.RLock()
 	data, _ := json.Marshal(b.m)

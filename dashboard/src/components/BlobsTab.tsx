@@ -123,11 +123,7 @@ export function BlobsTab() {
                     </td>
                     <td className="px-3 py-2 text-neutral-400">{b.ext ? `.${b.ext}` : '—'}</td>
                     <td className="px-3 py-2 font-mono text-xs">
-                      {b.pubkey ? (
-                        <Copyable full={npubEncode(b.pubkey)} display={truncateMiddle(npubEncode(b.pubkey), 10, 6)} />
-                      ) : (
-                        <span className="text-neutral-600" title="Uploaded before uploaders were tracked">—</span>
-                      )}
+                      <UploaderCell uploaders={b.uploaders} />
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums text-neutral-300">{formatBytes(b.size)}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-neutral-400">{formatDate(b.added)}</td>
@@ -222,6 +218,29 @@ function DownloadButton({ hash, ext }: { hash: string; ext: string }) {
 
 function HashCell({ hash }: { hash: string }) {
   return <Copyable full={hash} display={truncateMiddle(hash, 12, 8)} />
+}
+
+/**
+ * The blob's uploaders. Shows the original (first) uploader as a copyable npub;
+ * "+N" marks additional people who uploaded the same content, all listed on hover.
+ */
+function UploaderCell({ uploaders }: { uploaders?: string[] }) {
+  if (!uploaders || uploaders.length === 0) {
+    return <span className="text-neutral-600" title="Uploaded before uploaders were tracked">—</span>
+  }
+  const npub = npubEncode(uploaders[0])
+  const rest = uploaders.length - 1
+  const tip = uploaders.map((u) => npubEncode(u)).join('\n')
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Copyable full={npub} display={truncateMiddle(npub, 10, 6)} />
+      {rest > 0 && (
+        <span className="shrink-0 text-neutral-600" title={tip}>
+          +{rest}
+        </span>
+      )}
+    </span>
+  )
 }
 
 /**
