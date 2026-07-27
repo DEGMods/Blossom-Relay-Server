@@ -187,6 +187,12 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		setUploadCORS(w)
 		w.WriteHeader(http.StatusNoContent)
 	})
+	// Claim an already-stored blob as an uploader (dedup skipped the real upload).
+	mux.HandleFunc("PUT /claim/{hash}", s.handleClaim)
+	mux.HandleFunc("OPTIONS /claim/{hash}", func(w http.ResponseWriter, r *http.Request) {
+		setUploadCORS(w)
+		w.WriteHeader(http.StatusNoContent)
+	})
 	if s.adGate {
 		mux.HandleFunc("GET /ads/stats", s.handleAdStats)
 		mux.HandleFunc("POST /ads/click", s.handleAdClick)

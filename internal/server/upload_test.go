@@ -40,7 +40,14 @@ func (f *fakeStorage) Load(context.Context, string, string) (io.ReadSeekCloser, 
 	return nil, storage.ErrNotFound
 }
 func (f *fakeStorage) Delete(context.Context, string, string) error { return nil }
-func (f *fakeStorage) Has(context.Context, string, string) (bool, error) {
+func (f *fakeStorage) Has(_ context.Context, sha, _ string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for k := range f.stored {
+		if k == sha || strings.HasPrefix(k, sha+".") {
+			return true, nil
+		}
+	}
 	return false, nil
 }
 func (f *fakeStorage) Stat(context.Context, string, string) (storage.StatInfo, error) {
