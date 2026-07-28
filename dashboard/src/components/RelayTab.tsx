@@ -6,6 +6,7 @@ import {
 import { queryEvents, getRelayConfig, type EventsPage, type RelayEvent, type RelayConfig } from '../api'
 import { npubEncode, naddrEncode } from '../nostr'
 import { cn, truncateMiddle, formatDate } from '../lib'
+import { ConfigSection, ConfigRow } from './ConfigList'
 
 /** Kinds the relay stores, with human labels. Unknown kinds fall back to "kind N". */
 const KIND_LABELS: Record<number, string> = {
@@ -353,68 +354,26 @@ function RelaySettings() {
   if (error) return <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-8 text-sm text-destructive"><AlertTriangle className="h-4 w-4" /> {error}</div>
   if (!cfg) return null
 
-  const onOff = (b: boolean) => (b ? 'On' : 'Off')
   const bits = (n: number) => (n > 0 ? `${n} bits` : 'Off (0)')
 
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-2 rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-neutral-500" /> Read-only — the node’s live configuration, set in its config file. (Upload size caps are editable under the Settings tab.)
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-neutral-500" /> Read-only — the relay’s event policy, set in the node’s config file. Blob upload &amp; download settings live under the <span className="text-neutral-300">Settings</span> tab.
       </div>
 
-      <Section title="Relay policy">
-        <Row label="Kind allowlist" value={cfg.relay.accept_all_kinds ? 'Disabled — accepts any kind (fork mode)' : 'Mod-scoped'} />
+      <ConfigSection title="Relay policy">
+        <ConfigRow label="Kind allowlist" value={cfg.relay.accept_all_kinds ? 'Disabled — accepts any kind (fork mode)' : 'Mod-scoped'} />
         {!cfg.relay.accept_all_kinds && (
-          <Row
+          <ConfigRow
             label="Accepted kinds"
             value={cfg.relay.accepted_kinds.map((k) => `${k.label} (${k.kind})`).join(', ')}
           />
         )}
-        <Row label="Min event PoW" value={bits(cfg.relay.min_event_pow)} hint="NIP-13 bits required on mod events" />
-        <Row label="Legacy mods accepted before" value={formatDate(cfg.relay.legacy_cutoff)} hint="Kind 30402 (GameMod), PoW-exempt, until this cutoff" />
-        <Row label="Admin key configured" value={cfg.relay.admin_configured ? 'Yes' : 'No'} />
-      </Section>
-
-      <Section title="Download gate">
-        <Row label="Proof-of-work" value={bits(cfg.download_gate.pow_difficulty)} hint="BUD-POW leading-zero bits on downloads" />
-        <Row label="Ad gate" value={onOff(cfg.download_gate.ad_gate)} hint="BUD-Ads: require an ad view before download" />
-        <Row label="Min ad view" value={`${cfg.download_gate.ad_min_ms} ms`} />
-        <Row label="Challenge TTL" value={`${cfg.download_gate.challenge_ttl_sec}s`} />
-        <Row label="Trusted IP header" value={cfg.download_gate.trusted_ip_header || 'socket IP (none set)'} />
-      </Section>
-
-      <Section title="Upload & rate limits">
-        <Row label="Max concurrent uploads" value={String(cfg.upload.max_concurrent)} />
-        <Row label="Min upload speed" value={cfg.upload.min_upload_rate_kbps > 0 ? `${cfg.upload.min_upload_rate_kbps} KB/s` : 'Off'} hint="Uploads below this over a 5s window are aborted" />
-        <Row label="Idle timeout" value={`${cfg.upload.idle_timeout_sec}s`} hint="Abort an upload after this long with no data" />
-        <Row label="Upload auth PoW" value={bits(cfg.upload.min_pow)} hint="NIP-13 bits on the kind-24242 upload auth" />
-        <Row label="Min free disk" value={`${cfg.upload.min_free_disk_mb.toLocaleString()} MB`} hint="Refuse uploads below this free space" />
-        <Row label="Allowed types" value={cfg.upload.allowed_types.map((t) => (t === '*' ? 'any' : `.${t}`)).join(', ')} />
-        <Row label="Size cap" value={`${cfg.upload.size_cap_mb} MB`} hint={`Whitelisted: ${cfg.upload.whitelisted_cap_mb} MB`} />
-      </Section>
-    </div>
-  )
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-border bg-card">
-      <div className="border-b border-border px-4 py-2.5">
-        <h3 className="text-sm font-semibold text-neutral-200">{title}</h3>
-      </div>
-      <div className="divide-y divide-border/60">{children}</div>
-    </div>
-  )
-}
-
-function Row({ label, value, hint }: { label: string; value: string; hint?: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4 px-4 py-2.5">
-      <div className="min-w-0">
-        <div className="text-sm text-neutral-300">{label}</div>
-        {hint && <div className="text-xs text-muted-foreground">{hint}</div>}
-      </div>
-      <div className="shrink-0 text-right text-sm font-medium text-neutral-100">{value}</div>
+        <ConfigRow label="Min event PoW" value={bits(cfg.relay.min_event_pow)} hint="NIP-13 bits required on mod events" />
+        <ConfigRow label="Legacy mods accepted before" value={formatDate(cfg.relay.legacy_cutoff)} hint="Kind 30402 (GameMod), PoW-exempt, until this cutoff" />
+        <ConfigRow label="Admin key configured" value={cfg.relay.admin_configured ? 'Yes' : 'No'} />
+      </ConfigSection>
     </div>
   )
 }

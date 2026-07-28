@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Loader2, HardDrive, ShieldCheck, CreditCard, Info, Save, RotateCcw } from 'lucide-react'
-import { getWhitelist, setUploadCaps, resetUploadCaps } from '../api'
+import { getWhitelist, setUploadCaps, resetUploadCaps, getRelayConfig, type RelayConfig } from '../api'
+import { ConfigSection, ConfigRow } from './ConfigList'
 import { toast } from '../toast'
 
 /**
@@ -14,6 +15,7 @@ export function SettingsTab() {
   const [limitMb, setLimitMb] = useState('')
   const [whitelistedMb, setWhitelistedMb] = useState('')
   const [defaults, setDefaults] = useState<{ limit: number; whitelisted: number } | null>(null)
+  const [cfg, setCfg] = useState<RelayConfig | null>(null)
   const [saving, setSaving] = useState(false)
   const [resetting, setResetting] = useState(false)
 
@@ -31,6 +33,10 @@ export function SettingsTab() {
       .finally(() => setLoading(false))
   }
   useEffect(load, [])
+  // Read-only gate + rate-limit config (config-file values), shown below the caps.
+  useEffect(() => {
+    getRelayConfig().then(setCfg).catch(() => {})
+  }, [])
 
   const limit = Number(limitMb)
   const wl = Number(whitelistedMb)
@@ -129,9 +135,35 @@ export function SettingsTab() {
         hint="Per-subscriber limits — planned, not yet available."
         muted
       />
+
+      {cfg && (
+        <>
+          <ConfigSection title="Download gate">
+            <ConfigRow label="Proof-of-work" value={bits(cfg.download_gate.pow_difficulty)} hint="BUD-POW leading-zero bits on downloads" />
+            <ConfigRow label="Ad gate" value={cfg.download_gate.ad_gate ? 'On' : 'Off'} hint="BUD-Ads: require an ad view before download" />
+            <ConfigRow label="Min ad view" value={`${cfg.download_gate.ad_min_ms} ms`} />
+            <ConfigRow label="Challenge TTL" value={`${cfg.download_gate.challenge_ttl_sec}s`} />
+            <ConfigRow label="Trusted IP header" value={cfg.download_gate.trusted_ip_header || 'socket IP (none set)'} />
+          </ConfigSection>
+
+          <ConfigSection title="Upload & rate limits">
+            <ConfigRow label="Max concurrent uploads" value={String(cfg.upload.max_concurrent)} />
+            <ConfigRow label="Min upload speed" value={cfg.upload.min_upload_rate_kbps > 0 ? `${cfg.upload.min_upload_rate_kbps} KB/s` : 'Off'} hint="Uploads below this over a 5s window are aborted" />
+            <ConfigRow label="Idle timeout" value={`${cfg.upload.idle_timeout_sec}s`} hint="Abort an upload after this long with no data" />
+            <ConfigRow label="Upload auth PoW" value={bits(cfg.upload.min_pow)} hint="NIP-13 bits on the kind-24242 upload auth" />
+            <ConfigRow label="Min free disk" value={`${cfg.upload.min_free_disk_mb.toLocaleString()} MB`} hint="Refuse uploads below this free space" />
+            <ConfigRow label="Allowed types" value={cfg.upload.allowed_types.map((t) => (t === '*' ? 'any' : `.${t}`)).join(', ')} />
+          </ConfigSection>
+          <p className="px-1 text-xs text-muted-foreground">
+            These are read-only, set in the node’s config file. The size caps above are the editable ones.
+          </p>
+        </>
+      )}
     </div>
   )
 }
+
+const bits = (n: number) => (n > 0 ? `${n} bits` : 'Off (0)')
 
 function NumberRow({
   icon: Icon, title, hint, value, onChange, loading,
