@@ -17,6 +17,7 @@ func TestMatchesSearch(t *testing.T) {
 		Tags:      nostr.Tags{{"d", "cool-mod-123"}, {"t", "skyrim"}, {"title", "Cool Mod"}},
 	}
 	naddr, _ := nip19.EncodeEntity(pk, currentModKind, "cool-mod-123", nil)
+	npub, _ := nip19.EncodePublicKey(pk)
 
 	for _, tc := range []struct {
 		name   string
@@ -30,6 +31,7 @@ func TestMatchesSearch(t *testing.T) {
 		{"the d identifier", "cool-mod-123", true},
 		{"the full naddr", naddr, true},
 		{"the author pubkey", pk, true},
+		{"the author npub", npub, true},
 		{"a miss", "witcher", false},
 	} {
 		got := matchesSearch(evt, lower(tc.term))

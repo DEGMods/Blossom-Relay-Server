@@ -153,5 +153,27 @@ func matchesSearch(evt *nostr.Event, search string) bool {
 			}
 		}
 	}
+	// The raw JSON carries only hex pubkeys, so an npub search needs the bech32 form
+	// — of the author, and of any pubkey the event references via a p tag.
+	if npubContains(evt.PubKey, search) {
+		return true
+	}
+	for _, t := range evt.Tags {
+		if len(t) >= 2 && t[0] == "p" && npubContains(t[1], search) {
+			return true
+		}
+	}
 	return false
+}
+
+// npubContains reports whether a hex pubkey's npub form contains the search term.
+func npubContains(pubkeyHex, search string) bool {
+	if !isSHA256Hex(pubkeyHex) {
+		return false // pubkeys are 64 lowercase hex, same shape as a sha256
+	}
+	npub, err := nip19.EncodePublicKey(pubkeyHex)
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(npub), search)
 }
