@@ -48,18 +48,27 @@ export async function connect(): Promise<string> {
  * extension. Matches what the node's verifyAdmin expects: kind 27235, a `u`
  * tag with the exact URL and a `method` tag, created within ±60s.
  */
+// Extensions commonly mishandle *concurrent* signEvent calls — some drop all but
+// one — which made parallel admin fetches (e.g. the Settings tab firing three at
+// once) load intermittently. Serialize signing so at most one request is in flight
+// with the extension at a time; a failure doesn't break the chain for the next.
+let signQueue: Promise<unknown> = Promise.resolve()
+
 export async function nip98Header(url: string, method: string): Promise<string> {
   if (!window.nostr) throw new Error('No Nostr extension found')
-  const evt = await window.nostr.signEvent({
-    kind: 27235,
-    created_at: Math.floor(Date.now() / 1000),
-    tags: [
-      ['u', url],
-      ['method', method.toUpperCase()],
-    ],
-    content: '',
-  })
-  return `Nostr ${btoa(JSON.stringify(evt))}`
+  const signed = signQueue.then(() =>
+    window.nostr!.signEvent({
+      kind: 27235,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [
+        ['u', url],
+        ['method', method.toUpperCase()],
+      ],
+      content: '',
+    }),
+  )
+  signQueue = signed.catch(() => {})
+  return `Nostr ${btoa(JSON.stringify(await signed))}`
 }
 
 /** hex pubkey → npub (bech32). Minimal, dependency-free. */
