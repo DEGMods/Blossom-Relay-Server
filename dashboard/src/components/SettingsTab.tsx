@@ -1,8 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Loader2, HardDrive, ShieldCheck, CreditCard, Info, Save, RotateCcw } from 'lucide-react'
-import { getWhitelist, setUploadCaps, resetUploadCaps, getRelayConfig, type RelayConfig } from '../api'
+import { getWhitelist, setUploadCaps, resetUploadCaps, getRelayConfig, getNodeStats, type RelayConfig, type NodeStats } from '../api'
 import { ConfigSection, ConfigRow } from './ConfigList'
 import { toast } from '../toast'
+
+const fmtSize = (mb?: number): string => {
+  if (mb == null) return '—'
+  return mb >= 1024 ? `${(mb / 1024).toFixed(1)} GB` : `${mb.toLocaleString()} MB`
+}
 
 /**
  * Editable per-upload size caps (normal + whitelisted), plus a coming-soon row.
@@ -16,6 +21,7 @@ export function SettingsTab() {
   const [whitelistedMb, setWhitelistedMb] = useState('')
   const [defaults, setDefaults] = useState<{ limit: number; whitelisted: number } | null>(null)
   const [cfg, setCfg] = useState<RelayConfig | null>(null)
+  const [stats, setStats] = useState<NodeStats | null>(null)
   const [saving, setSaving] = useState(false)
   const [resetting, setResetting] = useState(false)
 
@@ -36,6 +42,7 @@ export function SettingsTab() {
   // Read-only gate + rate-limit config (config-file values), shown below the caps.
   useEffect(() => {
     getRelayConfig().then(setCfg).catch(() => {})
+    getNodeStats().then(setStats).catch(() => {})
   }, [])
 
   const limit = Number(limitMb)
@@ -128,6 +135,8 @@ export function SettingsTab() {
         </div>
       </div>
 
+      {stats && <NodeStorage stats={stats} />}
+
       <Row
         icon={CreditCard}
         title="Subscriber tiers"
@@ -164,6 +173,41 @@ export function SettingsTab() {
 }
 
 const bits = (n: number) => (n > 0 ? `${n} bits` : 'Off (0)')
+
+/** The node's own disk (its data-dir volume) — total/used/free, not R2/S3. */
+function NodeStorage({ stats }: { stats: NodeStats }) {
+  const { disk, data_dir_mb } = stats
+  const pct =
+    disk.available && disk.total_mb && disk.total_mb > 0
+      ? Math.min(100, Math.round(((disk.used_mb ?? 0) / disk.total_mb) * 100))
+      : 0
+  const near = pct >= 90
+  return (
+    <ConfigSection title="Node storage">
+      {disk.available ? (
+        <div className="space-y-2 px-4 py-3">
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-neutral-300">{fmtSize(disk.used_mb)} used</span>
+            <span className="text-muted-foreground">{fmtSize(disk.total_mb)} total</span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-secondary">
+            <div className={near ? 'h-full bg-destructive' : 'h-full bg-primary'} style={{ width: `${pct}%` }} />
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {fmtSize(disk.free_mb)} free · the node’s own disk, not the R2/S3 blob store
+          </div>
+        </div>
+      ) : (
+        <ConfigRow label="Disk usage" value="Unavailable" hint="Not reported on this platform" />
+      )}
+      <ConfigRow
+        label="Node footprint"
+        value={fmtSize(data_dir_mb)}
+        hint="Event store + metadata files in the data dir"
+      />
+    </ConfigSection>
+  )
+}
 
 function NumberRow({
   icon: Icon, title, hint, value, onChange, loading,

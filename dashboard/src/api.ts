@@ -263,6 +263,21 @@ export async function resetUploadCaps(): Promise<void> {
   if (!res.ok) throw new Error(await reason(res))
 }
 
+// ─── Node runtime stats ─────────────────────────────────────────────
+
+export interface NodeStats {
+  /** The disk the node runs on (its data dir volume) — not R2/S3. */
+  disk: { available: boolean; total_mb?: number; used_mb?: number; free_mb?: number }
+  /** The node's own footprint (event store + metadata files), MB. */
+  data_dir_mb: number
+}
+
+export async function getNodeStats(): Promise<NodeStats> {
+  const res = await adminFetch('/admin/stats', 'GET')
+  if (!res.ok) throw new Error(await reason(res))
+  return res.json()
+}
+
 // ─── helpers ────────────────────────────────────────────────────────
 
 export function formatBytes(n: number): string {

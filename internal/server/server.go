@@ -38,6 +38,7 @@ type Server struct {
 	storage            storage.Storage
 	publicURL          string
 	tempDir            string
+	dataDir            string
 	maxUploadBytes     int64
 	minFreeDiskMB      int64
 	uploadIdleTimeout  time.Duration
@@ -117,6 +118,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 		storage:            st,
 		publicURL:          cfg.PublicURL,
 		tempDir:            cfg.Upload.TempDir,
+		dataDir:            cfg.DataDir,
 		maxUploadBytes:     int64(cfg.Upload.MaxSizeMB) * 1024 * 1024,
 		minFreeDiskMB:      cfg.Upload.MinFreeDiskMB,
 		uploadIdleTimeout:  time.Duration(cfg.Upload.IdleTimeoutSec) * time.Second,
@@ -204,6 +206,7 @@ func New(cfg *config.Config, st storage.Storage, gateSecret, nodePubkey string) 
 	// Admin API (NIP-98 auth, admin key). Blob deletion via DELETE /<hash>.
 	mux.HandleFunc("DELETE /{hash}", s.handleDelete)
 	mux.HandleFunc("GET /admin/config", s.handleAdminConfig)
+	mux.HandleFunc("GET /admin/stats", s.handleAdminStats)
 	mux.HandleFunc("GET /admin/events", s.handleAdminEvents)
 	mux.HandleFunc("GET /admin/blobs", s.handleAdminBlobs)
 	mux.HandleFunc("GET /admin/blob/{hash}", s.handleAdminBlobDownload) // gate-free admin download
